@@ -1,11 +1,22 @@
 from pathlib import Path
 import json
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, Any
 from fastmcp import FastMCP
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
+# Check if real trading mode is enabled
+USE_REAL_TRADING = os.getenv("USE_MOOMOO", "false").lower() == "true"
+
+if USE_REAL_TRADING:
+    try:
+        from agent_tools.moomoo_client import get_moomoo_client
+        print("✅ Real-time price fetching enabled - Moomoo client imported")
+    except ImportError as e:
+        print(f"⚠️  Failed to import Moomoo client for price fetching: {e}")
+        USE_REAL_TRADING = False
 
 mcp = FastMCP("LocalPrices")
 
@@ -25,6 +36,8 @@ def _validate_date(date_str: str) -> None:
 @mcp.tool()
 def get_price_local(symbol: str, date: str) -> Dict[str, Any]:
     """Read OHLCV data for specified stock and date. Get historical information for specified stock.
+    
+    In real trading mode, if the requested date is today, returns real-time price from Moomoo.
 
     Args:
         symbol: Stock symbol, e.g. 'IBM' or '600243.SHH'.
@@ -38,6 +51,38 @@ def get_price_local(symbol: str, date: str) -> Dict[str, Any]:
         _validate_date(date)
     except ValueError as e:
         return {"error": str(e), "symbol": symbol, "date": date}
+    
+    # Check if we should fetch real-time price
+    if USE_REAL_TRADING:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if date == today_str:
+            print(f"📊 Fetching real-time price for {symbol} (today: {date})")
+            
+            moomoo_client = get_moomoo_client()
+            if moomoo_client:
+                # Ensure client is connected
+                if not moomoo_client.connected:
+                    moomoo_client.connect()
+                
+                # Get real-time price
+                real_price = moomoo_client.get_market_price(symbol)
+                if real_price:
+                    print(f"✅ Real-time price for {symbol}: ${real_price}")
+                    # Return in the same format as historical data
+                    return {
+                        "symbol": symbol,
+                        "date": date,
+                        "ohlcv": {
+                            "open": real_price,  # Use current price for all fields in real-time mode
+                            "high": real_price,
+                            "low": real_price,
+                            "close": real_price,
+                            "volume": 0,  # Volume not available in simplified real-time query
+                        },
+                        "real_time": True  # Flag to indicate this is real-time data
+                    }
+                else:
+                    print(f"⚠️  Failed to get real-time price for {symbol}, falling back to local data")
 
     data_path = _workspace_data_path(filename)
     if not data_path.exists():
