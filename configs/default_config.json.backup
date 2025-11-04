@@ -2,7 +2,7 @@
   "agent_type": "BaseAgent",
   "date_range": {
     "init_date": "2025-11-01",
-    "end_date": "2025-11-19"
+    "end_date": "2025-11-04"
   },
   "models": [
     {

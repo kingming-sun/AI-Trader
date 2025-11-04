@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - AI-Trader</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <style>
+        .config-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .config-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .config-section h3 {
+            color: var(--accent-blue);
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        
+        .form-group textarea {
+            min-height: 200px;
+            font-family: var(--font-mono);
+            resize: vertical;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .model-item {
+            background: var(--secondary-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .model-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .model-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #4a5568;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: var(--accent-blue);
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+        
+        .btn-secondary {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--card-bg);
+            border-color: var(--accent-blue);
+        }
+        
+        .help-text {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+        
+        .status-message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .status-message.success {
+            background: rgba(72, 187, 120, 0.2);
+            border: 1px solid var(--success);
+            color: var(--success);
+            display: block;
+        }
+        
+        .status-message.error {
+            background: rgba(245, 101, 101, 0.2);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">📊</span>
+                <h1>AI-Trader</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Asset Evolution</a></li>
+                <li><a href="portfolio.html" class="nav-link">Portfolio Analysis</a></li>
+                <li><a href="config.html" class="nav-link active">Configuration</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="config-container">
+            <header class="page-header">
+                <h2>System Configuration</h2>
+                <p class="subtitle">Configure trading parameters, agent settings, and prompts</p>
+            </header>
+
+            <div class="status-message" id="statusMessage"></div>
+            
+            <div class="config-section" style="background: rgba(237, 137, 54, 0.1); border: 1px solid var(--warning); margin-bottom: 2rem;">
+                <h3 style="color: var(--warning);">⚠️ Important Notice</h3>
+                <p style="color: var(--text-secondary); margin: 0; line-height: 1.6;">
+                    <strong>After saving configuration:</strong><br>
+                    1. Click <strong>"🔄 Restart main.py"</strong> to restart the program<br>
+                    2. Wait for <code>main.py</code> to finish running with new date range<br>
+                    3. <strong>Refresh the frontend page</strong> (F5 or Cmd+R) to see updated trading period<br><br>
+                    <strong>Note:</strong> The frontend displays trading period from actual data files, not from config. 
+                    New dates will appear only after main.py generates new trading data.
+                </p>
+            </div>
+
+            <form id="configForm">
+                <!-- Trading Date Range -->
+                <section class="config-section">
+                    <h3>📅 Trading Date Range</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="init_date">Start Date</label>
+                            <input type="date" id="init_date" name="init_date" required>
+                            <div class="help-text">Trading start date (YYYY-MM-DD)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="end_date">End Date</label>
+                            <input type="date" id="end_date" name="end_date" required>
+                            <div class="help-text">Trading end date (YYYY-MM-DD)</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Agent Configuration -->
+                <section class="config-section">
+                    <h3>⚙️ Agent Configuration</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="max_steps">Max Steps</label>
+                            <input type="number" id="max_steps" name="max_steps" min="1" max="100" value="30" required>
+                            <div class="help-text">Maximum reasoning steps for AI agent (1-100)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="max_retries">Max Retries</label>
+                            <input type="number" id="max_retries" name="max_retries" min="1" max="10" value="3" required>
+                            <div class="help-text">Maximum retry attempts on failure (1-10)</div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="base_delay">Base Delay (seconds)</label>
+                            <input type="number" id="base_delay" name="base_delay" min="0.1" max="10" step="0.1" value="1.0" required>
+                            <div class="help-text">Delay between retries in seconds</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="initial_cash">Initial Cash ($)</label>
+                            <input type="number" id="initial_cash" name="initial_cash" min="100" step="100" value="10000" required>
+                            <div class="help-text">Starting capital for trading</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Model Configuration -->
+                <section class="config-section">
+                    <h3>🤖 Model Configuration</h3>
+                    <div id="modelsContainer"></div>
+                </section>
+
+                <!-- Prompt Configuration -->
+                <section class="config-section">
+                    <h3>💬 Prompt Configuration</h3>
+                    <div class="form-group">
+                        <label for="system_prompt">System Prompt</label>
+                        <textarea id="system_prompt" name="system_prompt" required></textarea>
+                        <div class="help-text">System prompt for AI agent. Use {date}, {positions}, {yesterday_close_price}, {today_buy_price}, {STOP_SIGNAL} as placeholders.</div>
+                    </div>
+                </section>
+
+                <!-- Action Buttons -->
+                <div class="btn-group">
+                    <button type="button" class="btn-primary" id="loadConfigBtn">Load Current Config</button>
+                    <button type="button" class="btn-secondary" id="resetConfigBtn">Reset to Default</button>
+                    <button type="submit" class="btn-primary">Save Configuration</button>
+                    <button type="button" class="btn-secondary" id="downloadConfigBtn">Download Backup</button>
+                    <button type="button" class="btn-primary" id="restartMainBtn" style="background: linear-gradient(135deg, #f56565 0%, #ed8936 100%);">
+                        🔄 Restart main.py
+                    </button>
+                </div>
+                
+                <!-- Main.py Status -->
+                <div class="config-section" style="margin-top: 1rem; padding: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="color: var(--text-primary);">main.py Status:</strong>
+                            <span id="mainStatus" style="color: var(--text-secondary); margin-left: 0.5rem;">Checking...</span>
+                        </div>
+                        <button type="button" class="btn-secondary" id="refreshStatusBtn" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+                            Refresh Status
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>AI-Trader &copy; 2025 | AI-Powered Trading Agent Benchmark</p>
+    </footer>
+
+    <script src="assets/js/config-manager.js"></script>
+</body>
+</html>
+
