@@ -1,0 +1,26 @@
+services:
+  # Main Web Service (Frontend + APIs)
+  - type: web
+    name: ai-trader-platform
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: 1
+      - key: PORT
+        value: 8080
+      # Add your API keys in Render dashboard environment variables:
+      # OPENAI_API_BASE
+      # OPENAI_API_KEY
+      # ALPHAADVANTAGE_API_KEY
+      # JINA_API_KEY
+      # MOOMOO_HOST (optional)
+      # MOOMOO_PORT (optional)
+      # MOOMOO_TRD_ENV (optional)
+      # MOOMOO_UNLOCK_PWD (optional)
+      # MOOMOO_API_KEY (optional)
+    healthCheckPath: /health
+    buildCommand: docker build -t ai-trader .
+    startCommand: python startup.py
+

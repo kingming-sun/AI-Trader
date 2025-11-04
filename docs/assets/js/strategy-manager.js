@@ -3,7 +3,8 @@
 
 class StrategyManager {
     constructor() {
-        this.apiBase = 'http://localhost:8005';
+        // Use API_CONFIG if available (from api-config.js), otherwise fallback to localhost
+        this.apiBase = window.API_CONFIG?.strategyApi || 'http://localhost:8005';
     }
 
     async listStrategies() {

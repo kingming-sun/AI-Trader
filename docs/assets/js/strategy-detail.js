@@ -3,7 +3,8 @@
 
 class StrategyDetail {
     constructor() {
-        this.apiBase = 'http://localhost:8005';
+        // Use API_CONFIG if available (from api-config.js), otherwise fallback to localhost
+        this.apiBase = window.API_CONFIG?.strategyApi || 'http://localhost:8005';
         this.strategyId = this.getStrategyIdFromUrl();
         this.currentMode = 'backtest'; // backtest, simulate, or real
         this.currentConfigMode = 'backtest'; // Mode for config tab

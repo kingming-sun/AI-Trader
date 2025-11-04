@@ -4,7 +4,8 @@
 class ConfigManager {
     constructor() {
         // API endpoint - should be running on port 8004
-        this.apiBase = 'http://localhost:8004';
+        // Use API_CONFIG if available (from api-config.js), otherwise fallback to localhost
+        this.apiBase = window.API_CONFIG?.configApi || 'http://localhost:8004';
         this.config = null;
         this.originalPrompt = null;
     }

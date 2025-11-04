@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  ai-trader:
+    build: .
+    container_name: ai-trader-platform
+    ports:
+      - "8080:8080"  # Frontend
+      - "8004:8004"  # Config API
+      - "8005:8005"  # Strategy API
+      - "8000:8000"  # MCP Math
+      - "8001:8001"  # MCP Search
+      - "8002:8002"  # MCP Trade
+      - "8003:8003"  # MCP Price
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8080
+      # Add your environment variables here or use .env file
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ALPHAADVANTAGE_API_KEY=${ALPHAADVANTAGE_API_KEY:-}
+      - JINA_API_KEY=${JINA_API_KEY:-}
+      - MOOMOO_HOST=${MOOMOO_HOST:-127.0.0.1}
+      - MOOMOO_PORT=${MOOMOO_PORT:-11111}
+      - MOOMOO_TRD_ENV=${MOOMOO_TRD_ENV:-SIMULATE}
+      - MOOMOO_UNLOCK_PWD=${MOOMOO_UNLOCK_PWD:-}
+      - MOOMOO_API_KEY=${MOOMOO_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
