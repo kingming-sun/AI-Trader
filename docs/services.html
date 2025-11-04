@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>平台服务状态 - AI-Trader</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <style>
+        .services-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .services-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .services-header h2 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .service-section {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .service-section h3 {
+            color: var(--accent-cyan);
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+        
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1rem;
+        }
+        
+        .service-item {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all var(--transition-fast);
+        }
+        
+        .service-item:hover {
+            transform: translateX(4px);
+            border-color: var(--accent-blue);
+        }
+        
+        .service-info {
+            flex: 1;
+        }
+        
+        .service-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+            font-size: 1.1rem;
+        }
+        
+        .service-details {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .service-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .service-status.running {
+            background: rgba(72, 187, 120, 0.1);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        
+        .service-status.stopped {
+            background: rgba(245, 101, 101, 0.1);
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+        
+        .service-status.warning {
+            background: rgba(237, 137, 54, 0.1);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+        
+        .service-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+        
+        .btn-service {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-weight: 500;
+        }
+        
+        .btn-start {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-start:hover {
+            background: #3dad68;
+        }
+        
+        .btn-stop {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-stop:hover {
+            background: #e04444;
+        }
+        
+        .btn-restart {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-restart:hover {
+            background: #d87a2e;
+        }
+        
+        .batch-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            justify-content: center;
+        }
+        
+        .btn-batch {
+            padding: 0.75rem 2rem;
+            font-size: 1rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all var(--transition-normal);
+        }
+        
+        .btn-batch-start {
+            background: linear-gradient(135deg, var(--success), #3dad68);
+            color: white;
+        }
+        
+        .btn-batch-stop {
+            background: linear-gradient(135deg, var(--danger), #e04444);
+            color: white;
+        }
+        
+        .btn-batch:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .refresh-btn {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all var(--transition-normal);
+        }
+        
+        .refresh-btn:hover {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: var(--primary-bg);
+        }
+        
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .loading .loading-spinner {
+            display: inline-block;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">📊</span>
+                <h1>AI-Trader</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="home.html" class="nav-link">首页</a></li>
+                <li><a href="services.html" class="nav-link active">服务状态</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="services-container">
+        <div class="services-header">
+            <div>
+                <h2>平台服务状态</h2>
+                <p class="subtitle">监控和管理后端服务运行状态</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div class="auto-refresh">
+                    <span class="loading-spinner"></span>
+                    <span>自动刷新: 5秒</span>
+                </div>
+                <button class="refresh-btn" id="refreshBtn">🔄 刷新状态</button>
+            </div>
+        </div>
+        
+        <!-- MCP Services -->
+        <section class="service-section">
+            <h3>MCP 服务</h3>
+            <div class="service-grid" id="mcpServices">
+                <!-- MCP services will be loaded here -->
+            </div>
+        </section>
+        
+        <!-- API Services -->
+        <section class="service-section">
+            <h3>API 服务</h3>
+            <div class="service-grid" id="apiServices">
+                <!-- API services will be loaded here -->
+            </div>
+        </section>
+        
+        <!-- Batch Actions -->
+        <div class="batch-actions">
+            <button class="btn-batch btn-batch-start" id="startAllBtn">
+                ▶️ 启动所有服务
+            </button>
+            <button class="btn-batch btn-batch-stop" id="stopAllBtn">
+                ⏹️ 停止所有服务
+            </button>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
+    </footer>
+
+    <script src="assets/js/services-manager.js"></script>
+</body>
+</html>

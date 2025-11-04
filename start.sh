@@ -1,105 +1,163 @@
 #!/bin/bash
-# AI-Trader Platform - One-Click Startup Script
-# Starts all required services: MCP, Config API, Strategy API, Frontend
+# AI-Trader Platform Startup Script
+# Consolidated script to start all required services
 
 set -e
 
-echo "🚀 Starting AI-Trader Platform..."
+echo "╔════════════════════════════════════════════╗"
+echo "║      🚀 AI-Trader Platform Launcher        ║"
+echo "╚════════════════════════════════════════════╝"
 echo ""
 
-# Get script directory
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python3 not found. Please install Python3."
+# Function to check if port is available
+check_port() {
+    local port=$1
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo -e "${RED}❌ Port $port is already in use${NC}"
+        echo "   Please stop the service using this port or run './stop.sh'"
+        return 1
+    fi
+    return 0
+}
+
+# Function to wait for service
+wait_for_service() {
+    local url=$1
+    local service_name=$2
+    local max_attempts=10
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        if curl -s -o /dev/null -w "%{http_code}" "$url" | grep -q "200\|404"; then
+            echo -e "  ${GREEN}✓${NC} $service_name is ready"
+            return 0
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    
+    echo -e "  ${YELLOW}⚠${NC} $service_name may not be fully ready"
+    return 1
+}
+
+# Check required ports
+echo "📍 Checking port availability..."
+PORTS_OK=true
+for port in 8000 8001 8002 8003 8004 8005 8080; do
+    if ! check_port $port; then
+        PORTS_OK=false
+    fi
+done
+
+if [ "$PORTS_OK" = false ]; then
+    echo ""
+    echo -e "${RED}Cannot start platform: Some ports are already in use.${NC}"
+    echo "Run './stop.sh' to stop existing services, or check what's using the ports."
     exit 1
 fi
 
-# Activate virtual environment if exists
-if [ -d "venv" ]; then
-    echo "📦 Activating virtual environment..."
-    source venv/bin/activate
+echo -e "${GREEN}✅ All required ports are available${NC}"
+echo ""
+
+# Check Python virtual environment
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "🐍 Activating Python virtual environment..."
+    if [ -d "venv" ]; then
+        source venv/bin/activate
+        echo -e "${GREEN}✅ Virtual environment activated${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No virtual environment found, using system Python${NC}"
+    fi
+else
+    echo -e "${GREEN}✅ Virtual environment already active${NC}"
 fi
+echo ""
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-# Create logs directory
+# Create log directory
 mkdir -p logs
 
-# Step 1: Start MCP Services
-echo -e "${GREEN}🔧 [1/4] Starting MCP Services...${NC}"
+# Start services
+echo "🚀 Starting services..."
+echo ""
+
+# Step 1: MCP Services
+echo "1️⃣  Starting MCP Services (Math, Search, Trade, Price)..."
 cd agent_tools
-python start_mcp_services.py > ../logs/mcp_services.log 2>&1 &
+nohup python start_mcp_services.py > ../logs/mcp_services.log 2>&1 &
 MCP_PID=$!
 cd ..
-echo "   ⏳ Waiting for MCP services to start..."
-sleep 5
-if ps -p $MCP_PID > /dev/null 2>&1; then
-    echo "   ✅ MCP Services started (PID: $MCP_PID)"
-else
-    echo "   ⚠️  MCP Services may have issues, check logs/mcp_services.log"
-fi
+sleep 3
+wait_for_service "http://localhost:8000" "Math Service"
+wait_for_service "http://localhost:8001" "Search Service"
+wait_for_service "http://localhost:8002" "Trade Service"
+wait_for_service "http://localhost:8003" "Price Service"
 echo ""
 
-# Step 2: Start Config API
-echo -e "${GREEN}🔧 [2/4] Starting Config API (port 8004)...${NC}"
-python config_api.py > logs/config_api.log 2>&1 &
+# Step 2: Config API
+echo "2️⃣  Starting Configuration API (port 8004)..."
+nohup python config_api.py > logs/config_api.log 2>&1 &
 CONFIG_API_PID=$!
 sleep 2
-echo "   ✅ Config API started (PID: $CONFIG_API_PID)"
+wait_for_service "http://localhost:8004/api/config" "Config API"
 echo ""
 
-# Step 3: Start Strategy API
-echo -e "${GREEN}🔧 [3/4] Starting Strategy API (port 8005)...${NC}"
-python platform/strategy_api.py > logs/strategy_api.log 2>&1 &
+# Step 3: Strategy API
+echo "3️⃣  Starting Strategy Management API (port 8005)..."
+nohup python platform/strategy_api.py > logs/strategy_api.log 2>&1 &
 STRATEGY_API_PID=$!
 sleep 2
-echo "   ✅ Strategy API started (PID: $STRATEGY_API_PID)"
+wait_for_service "http://localhost:8005/api/strategies" "Strategy API"
 echo ""
 
-# Step 4: Start Frontend
-echo -e "${GREEN}🔧 [4/4] Starting Frontend Server (port 8000)...${NC}"
+# Step 4: Frontend Server
+echo "4️⃣  Starting Web Frontend Server (port 8080)..."
 cd docs
-python3 -m http.server 8000 > ../logs/frontend.log 2>&1 &
+nohup python3 -m http.server 8080 > ../logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
 cd ..
 sleep 1
-echo "   ✅ Frontend Server started (PID: $FRONTEND_PID)"
+wait_for_service "http://localhost:8080" "Frontend Server"
 echo ""
 
 # Save PIDs for cleanup
-echo "$MCP_PID" > .platform_pids
-echo "$CONFIG_API_PID" >> .platform_pids
-echo "$STRATEGY_API_PID" >> .platform_pids
-echo "$FRONTEND_PID" >> .platform_pids
+echo "$MCP_PID $CONFIG_API_PID $STRATEGY_API_PID $FRONTEND_PID" > .platform_pids
 
-echo "=========================================="
-echo -e "${GREEN}🎉 AI-Trader Platform Started!${NC}"
-echo "=========================================="
+# Display success information
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║         🎉 AI-Trader Platform Successfully Started!        ║"
+echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
-echo "📋 Service URLs:"
-echo "   - Frontend:        http://localhost:8000"
-echo "   - Config API:      http://localhost:8004"
-echo "   - Strategy API:    http://localhost:8005"
+echo "📊 Service Status:"
+echo "┌─────────────────────────────────────────────────────────────┐"
+echo "│ Service          │ Port  │ Status  │ PID                   │"
+echo "├─────────────────────────────────────────────────────────────┤"
+printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Math" "8000" "Active" "$MCP_PID"
+printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Search" "8001" "Active" "-"
+printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Trade" "8002" "Active" "-"
+printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Price" "8003" "Active" "-"
+printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "Config API" "8004" "Active" "$CONFIG_API_PID"
+printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "Strategy API" "8005" "Active" "$STRATEGY_API_PID"
+printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "Web Frontend" "8080" "Active" "$FRONTEND_PID"
+echo "└─────────────────────────────────────────────────────────────┘"
 echo ""
-echo "📊 MCP Services:"
-echo "   - Math:            http://localhost:8000"
-echo "   - Search:          http://localhost:8001"
-echo "   - Trade:            http://localhost:8002"
-echo "   - Price:           http://localhost:8003"
+echo "🌐 Access Points:"
+echo "  ${BLUE}Main Platform:${NC}     http://localhost:8080/home.html"
+echo "  ${BLUE}Strategy Manager:${NC}  http://localhost:8080/strategies.html"
+echo "  ${BLUE}Service Status:${NC}    http://localhost:8080/services.html"
 echo ""
-echo -e "${YELLOW}💡 To stop all services, run: ./stop.sh${NC}"
-echo -e "${YELLOW}💡 Or press Ctrl+C to stop this script${NC}"
+echo "📝 Logs:"
+echo "  All service logs are saved in the 'logs/' directory"
 echo ""
-
-# Wait for user interrupt
-trap "echo ''; echo '🛑 Stopping services...'; ./stop.sh; exit" INT TERM
-
-# Keep script running
-wait
+echo "🛑 To stop all services:"
+echo "  Run: ${YELLOW}./stop.sh${NC}"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 

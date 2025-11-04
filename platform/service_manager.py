@@ -44,22 +44,34 @@ class ServiceManager:
         for service_name, port in ports.items():
             is_running = False
             
-            # Check if port is in use
-            for conn in psutil.net_connections():
-                if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port:
-                    is_running = True
-                    break
+            try:
+                # Check if port is in use
+                for conn in psutil.net_connections():
+                    if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port:
+                        is_running = True
+                        break
+            except (psutil.AccessDenied, PermissionError):
+                # Fallback: try to connect to the port
+                import socket
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.5)
+                result = sock.connect_ex(('localhost', port))
+                sock.close()
+                is_running = (result == 0)
             
             # Also check for processes
             if not is_running:
-                for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                    try:
-                        cmdline = proc.info.get('cmdline', [])
-                        if cmdline and any('tool_' in arg and service_name in arg for arg in cmdline):
-                            is_running = True
-                            break
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
+                try:
+                    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                        try:
+                            cmdline = proc.info.get('cmdline', [])
+                            if cmdline and any('tool_' in arg and service_name in arg for arg in cmdline):
+                                is_running = True
+                                break
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+                except (psutil.AccessDenied, PermissionError):
+                    pass
             
             services_status[service_name] = is_running
         
@@ -163,10 +175,19 @@ class ServiceManager:
         
         for api_name, port in api_ports.items():
             is_running = False
-            for conn in psutil.net_connections():
-                if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port:
-                    is_running = True
-                    break
+            try:
+                for conn in psutil.net_connections():
+                    if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port:
+                        is_running = True
+                        break
+            except (psutil.AccessDenied, PermissionError):
+                # Fallback: try to connect to the port
+                import socket
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.5)
+                result = sock.connect_ex(('localhost', port))
+                sock.close()
+                is_running = (result == 0)
             api_status[api_name] = is_running
         
         return {

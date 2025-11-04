@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>策略详情 - AI-Trader</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .detail-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+        }
+        
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .detail-header h2 {
+            font-size: 2rem;
+            color: var(--accent-cyan);
+        }
+        
+        .back-link {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all var(--transition-normal);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .back-link:hover {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: var(--primary-bg);
+            transform: translateX(-4px);
+        }
+        
+        .tab-nav {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0;
+        }
+        
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            transition: all var(--transition-normal);
+        }
+        
+        .tab-btn:hover {
+            color: var(--accent-cyan);
+        }
+        
+        .tab-btn.active {
+            color: var(--accent-blue);
+        }
+        
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Config Tab Styles */
+        .config-section {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .config-section h3 {
+            color: var(--accent-cyan);
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+        
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .config-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .config-item label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        
+        .config-item input,
+        .config-item select,
+        .config-item textarea {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        
+        .config-item textarea {
+            min-height: 150px;
+            resize: vertical;
+            font-family: var(--font-mono);
+        }
+        
+        .config-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            justify-content: flex-end;
+        }
+        
+        .btn-save {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+        }
+        
+        /* Mode Selector for Asset & Portfolio tabs */
+        .mode-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid var(--border-color);
+            background: var(--secondary-bg);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        
+        .mode-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+        }
+        
+        .mode-btn.active {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            color: white;
+            border-color: transparent;
+        }
+        
+        .mode-btn.backtest.active {
+            background: linear-gradient(135deg, #00d4ff, #00ffcc);
+        }
+        
+        .mode-btn.simulate.active {
+            background: linear-gradient(135deg, #ffbe0b, #fb5607);
+        }
+        
+        .mode-btn.real.active {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+        }
+        
+        /* Stats Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .metric-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-value {
+            color: var(--accent-cyan);
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+        
+        .metric-value.positive {
+            color: var(--success);
+        }
+        
+        .metric-value.negative {
+            color: var(--danger);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">📊</span>
+                <h1>AI-Trader</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="home.html" class="nav-link">首页</a></li>
+                <li><a href="strategies.html" class="nav-link active">策略管理</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="detail-container">
+        <div class="detail-header">
+            <h2 id="strategyName">策略详情</h2>
+            <a href="strategies.html" class="back-link">
+                ← 返回列表
+            </a>
+        </div>
+        
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="config">配置管理</button>
+            <button class="tab-btn" data-tab="asset">资产演变</button>
+            <button class="tab-btn" data-tab="portfolio">投资组合分析</button>
+        </div>
+        
+        <!-- Tab Contents -->
+        <div id="config-tab" class="tab-content active">
+            <!-- Mode Selector for Config -->
+            <div class="mode-selector">
+                <button class="mode-btn backtest active" data-mode="backtest">回测配置</button>
+                <button class="mode-btn simulate" data-mode="simulate">模拟盘配置</button>
+                <button class="mode-btn real" data-mode="real">实盘配置</button>
+            </div>
+            
+            <section class="config-section">
+                <h3>📝 Prompt 配置</h3>
+                <div class="config-item">
+                    <label>系统提示词</label>
+                    <textarea id="systemPrompt" placeholder="输入策略的系统提示词..."></textarea>
+                </div>
+            </section>
+            
+            <section class="config-section">
+                <h3>⚙️ Agent 配置</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label>最大步数</label>
+                        <input type="number" id="maxSteps" min="1" max="100" value="30">
+                    </div>
+                    <div class="config-item">
+                        <label>最大重试次数</label>
+                        <input type="number" id="maxRetries" min="1" max="10" value="3">
+                    </div>
+                    <div class="config-item">
+                        <label>基础延迟（秒）</label>
+                        <input type="number" id="baseDelay" min="0.1" step="0.1" value="1.0">
+                    </div>
+                    <div class="config-item">
+                        <label>初始资金（$）</label>
+                        <input type="number" id="initialCash" min="100" step="100" value="10000">
+                    </div>
+                </div>
+            </section>
+            
+            <section class="config-section" id="dateRangeSection">
+                <h3>📅 交易日期范围</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label>开始日期</label>
+                        <input type="date" id="startDate">
+                    </div>
+                    <div class="config-item">
+                        <label>结束日期</label>
+                        <input type="date" id="endDate">
+                    </div>
+                </div>
+                <p class="mode-hint" style="display: none; color: var(--text-muted); margin-top: 1rem; padding: 0.75rem; background: var(--secondary-bg); border-radius: 6px;">
+                    ℹ️ 实时运行，无需设置日期范围
+                </p>
+            </section>
+            
+            <div class="config-actions">
+                <button class="btn-secondary" id="resetConfigBtn">重置</button>
+                <button class="btn-save" id="saveConfigBtn">保存配置</button>
+                <button class="btn-restart" id="restartServiceBtn" style="display: none; background: var(--warning);">
+                    🔄 重启服务
+                </button>
+            </div>
+            
+            <div id="config-message" style="margin-top: 1rem; padding: 1rem; background: var(--secondary-bg); border-radius: 8px; display: none;">
+                <p style="color: var(--warning); margin: 0;">
+                    ⚠️ 配置已保存，需要重启服务才能生效
+                </p>
+            </div>
+        </div>
+        
+        <div id="asset-tab" class="tab-content">
+            <div class="mode-selector">
+                <button class="mode-btn backtest active" data-mode="backtest">回测</button>
+                <button class="mode-btn simulate" data-mode="simulate">模拟盘</button>
+                <button class="mode-btn real" data-mode="real">实盘</button>
+            </div>
+            
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">初始资金</div>
+                    <div class="metric-value">$10,000</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">当前资产</div>
+                    <div class="metric-value">$12,500</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">总收益率</div>
+                    <div class="metric-value positive">+25.00%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">最大回撤</div>
+                    <div class="metric-value negative">-8.50%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">夏普比率</div>
+                    <div class="metric-value">1.85</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">交易天数</div>
+                    <div class="metric-value">60</div>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>📈 资产价值变化</h3>
+                <div style="height: 400px; position: relative;">
+                    <canvas id="assetChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>🤖 AI 思考日志</h3>
+                <div style="margin-bottom: 1rem;">
+                    <label style="color: var(--text-secondary); font-size: 0.875rem;">选择日期：</label>
+                    <select id="logDateSelector" style="padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); color: var(--text-primary); margin-left: 0.5rem;">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+                <div id="thinkingLogsContainer" style="max-height: 500px; overflow-y: auto; background: var(--secondary-bg); border-radius: 8px; padding: 1rem;">
+                    <p style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                        请选择日期查看 AI 思考日志
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="portfolio-tab" class="tab-content">
+            <div class="mode-selector">
+                <button class="mode-btn backtest active" data-mode="backtest">回测</button>
+                <button class="mode-btn simulate" data-mode="simulate">模拟盘</button>
+                <button class="mode-btn real" data-mode="real">实盘</button>
+            </div>
+            
+            <div class="config-section">
+                <h3>📊 当前持仓</h3>
+                <table class="holdings-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>股票代码</th>
+                            <th>持股数量</th>
+                            <th>成本价</th>
+                            <th>当前价</th>
+                            <th>市值</th>
+                            <th>盈亏</th>
+                            <th>盈亏比例</th>
+                        </tr>
+                    </thead>
+                    <tbody id="holdingsTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                                暂无持仓数据
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="config-section">
+                <h3>🎯 资产分布</h3>
+                <div style="height: 300px; position: relative; max-width: 500px; margin: 0 auto;">
+                    <canvas id="allocationChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
+    </footer>
+
+    <script src="assets/js/strategy-detail.js"></script>
+</body>
+</html>

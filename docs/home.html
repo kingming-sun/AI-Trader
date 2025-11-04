@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Trader 平台首页</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <style>
+        .home-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            min-height: calc(100vh - 200px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .home-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+        
+        .home-header h1 {
+            font-size: 3rem;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+        
+        .home-header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+        }
+        
+        .home-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .home-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 3rem;
+            text-align: center;
+            transition: all var(--transition-normal);
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .home-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+            transform: scaleX(0);
+            transition: transform var(--transition-normal);
+        }
+        
+        .home-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .home-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 40px rgba(0, 212, 255, 0.2);
+            border-color: var(--accent-blue);
+        }
+        
+        .home-card-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+        
+        .home-card-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin-bottom: 1rem;
+        }
+        
+        .home-card-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            font-size: 1.1rem;
+        }
+        
+        .home-card-features {
+            margin-top: 1.5rem;
+            text-align: left;
+            list-style: none;
+            padding: 0;
+        }
+        
+        .home-card-features li {
+            padding: 0.5rem 0;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .home-card-features li::before {
+            content: '✓';
+            color: var(--success);
+            margin-right: 0.5rem;
+            font-weight: bold;
+        }
+        
+        @media (max-width: 900px) {
+            .home-cards {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            
+            .home-card {
+                padding: 2rem;
+            }
+            
+            .home-header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">📊</span>
+                <h1>AI-Trader</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="home.html" class="nav-link active">首页</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="home-container">
+        <header class="home-header">
+            <h1>AI-Trader 平台</h1>
+            <p>智能交易策略研究与管理平台</p>
+        </header>
+        
+        <div class="home-cards">
+            <a href="strategies.html" class="home-card">
+                <span class="home-card-icon">📊</span>
+                <h2 class="home-card-title">策略管理</h2>
+                <p class="home-card-description">
+                    管理交易策略，查看运行结果
+                </p>
+                <ul class="home-card-features">
+                    <li>创建和管理多个交易策略</li>
+                    <li>回测、模拟、实盘三种模式</li>
+                    <li>查看资产演变和投资组合</li>
+                    <li>配置策略参数和提示词</li>
+                </ul>
+            </a>
+            
+            <a href="services.html" class="home-card">
+                <span class="home-card-icon">⚙️</span>
+                <h2 class="home-card-title">平台服务状态</h2>
+                <p class="home-card-description">
+                    监控服务状态，管理服务运行
+                </p>
+                <ul class="home-card-features">
+                    <li>MCP 服务运行状态监控</li>
+                    <li>API 服务健康检查</li>
+                    <li>一键启动/停止服务</li>
+                    <li>查看服务运行日志</li>
+                </ul>
+            </a>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
+    </footer>
+</body>
+</html>

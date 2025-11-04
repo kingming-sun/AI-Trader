@@ -66,85 +66,44 @@ class StrategyManager {
 
     getStatusText(status) {
         const texts = {
-            'design': 'Design',
-            'backtest': 'Backtesting',
-            'simulate': 'Simulating',
-            'real': 'Real Trading'
+            'design': '设计中',
+            'backtest': '回测中',
+            'simulate': '模拟中',
+            'real': '实盘中'
         };
         return texts[status] || status;
     }
 
-    async getServicesStatus() {
-        try {
-            const response = await fetch(`${this.apiBase}/api/services/status`);
-            if (!response.ok) throw new Error('Failed to load services status');
-            const data = await response.json();
-            return data.status || {};
-        } catch (error) {
-            console.error('Error loading services status:', error);
-            return {};
+    async deleteStrategy(strategyId, strategyName) {
+        // Show confirmation dialog
+        const confirmed = confirm(
+            `⚠️ 删除策略：${strategyName}\n\n` +
+            `此操作将删除策略的所有配置和数据，且不可恢复。\n\n` +
+            `是否确定删除？`
+        );
+        
+        if (!confirmed) {
+            return false;
         }
-    }
-
-    async startMCPServices() {
+        
         try {
-            const response = await fetch(`${this.apiBase}/api/services/mcp/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+            const response = await fetch(`${this.apiBase}/api/strategies/${strategyId}`, {
+                method: 'DELETE'
             });
-            if (!response.ok) throw new Error('Failed to start MCP services');
-            return await response.json();
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to delete strategy');
+            }
+            
+            return true;
         } catch (error) {
-            console.error('Error starting MCP services:', error);
-            throw error;
+            console.error('Error deleting strategy:', error);
+            alert(`删除策略失败：${error.message}`);
+            return false;
         }
     }
 
-    async stopMCPServices() {
-        try {
-            const response = await fetch(`${this.apiBase}/api/services/mcp/stop`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (!response.ok) throw new Error('Failed to stop MCP services');
-            return await response.json();
-        } catch (error) {
-            console.error('Error stopping MCP services:', error);
-            throw error;
-        }
-    }
-
-    updateServicesStatus(status) {
-        const container = document.getElementById('servicesStatus');
-        if (!container) return;
-
-        const mcpServices = status.mcp_services || {};
-        const apiServices = status.api_services || {};
-
-        const mcpItems = Object.entries(mcpServices).map(([name, running]) => `
-            <div style="background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 600;">MCP ${name}</span>
-                    <span style="color: ${running ? 'var(--success)' : 'var(--danger)'};">
-                        ${running ? '✅ Running' : '❌ Stopped'}
-                    </span>
-                </div>
-            </div>
-        `).join('');
-
-        const apiItems = Object.entries(apiServices).map(([name, running]) => `
-            <div style="background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 600;">${name.replace('_', ' ').toUpperCase()}</span>
-                    <span style="color: ${running ? 'var(--success)' : 'var(--danger)'};">
-                        ${running ? '✅ Running' : '❌ Stopped'}
-                    </span>
-                </div>
-            </div>
-        `).join('');
-
-        container.innerHTML = mcpItems + apiItems;
-    }
 }
 
 const strategyManager = new StrategyManager();
@@ -153,8 +112,13 @@ async function loadStrategies() {
     const strategies = await strategyManager.listStrategies();
     const container = document.getElementById('strategyList');
     
+    if (!container) {
+        console.error('Strategy list container not found');
+        return;
+    }
+    
     if (strategies.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No strategies yet. Create your first strategy to get started!</p>';
+        container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 2rem;">还没有策略，创建您的第一个策略开始！</p>';
         return;
     }
     
@@ -163,20 +127,21 @@ async function loadStrategies() {
             <div class="strategy-card-header">
                 <div>
                     <h4 style="margin: 0 0 0.5rem 0;">${strategy.strategy_name}</h4>
-                    <p style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">${strategy.description || 'No description'}</p>
+                    <p style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">${strategy.description || '无描述'}</p>
                 </div>
                 <span class="strategy-status ${strategyManager.getStatusClass(strategy.status)}">
                     ${strategyManager.getStatusText(strategy.status)}
                 </span>
             </div>
             <div style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
-                Created: ${new Date(strategy.created_at).toLocaleDateString()}
+                创建时间: ${new Date(strategy.created_at).toLocaleDateString('zh-CN')}
             </div>
             <div class="strategy-actions">
-                <button class="btn-small btn-edit" onclick="editStrategy('${strategy.strategy_id}')">Edit</button>
-                <button class="btn-small btn-run" onclick="runStrategy('${strategy.strategy_id}', 'backtest')">Backtest</button>
-                <button class="btn-small btn-run" onclick="runStrategy('${strategy.strategy_id}', 'simulate')">Simulate</button>
-                <button class="btn-small btn-run" style="background: var(--danger);" onclick="runStrategy('${strategy.strategy_id}', 'real')">Real</button>
+                <button class="btn-small btn-edit" onclick="editStrategy('${strategy.strategy_id}')">查看详情</button>
+                <button class="btn-small btn-run" onclick="runStrategy('${strategy.strategy_id}', 'backtest')">回测</button>
+                <button class="btn-small btn-run" onclick="runStrategy('${strategy.strategy_id}', 'simulate')">模拟</button>
+                <button class="btn-small btn-run" style="background: var(--danger);" onclick="runStrategy('${strategy.strategy_id}', 'real')">实盘</button>
+                <button class="btn-small btn-delete" style="background: var(--danger); margin-left: auto;" onclick="deleteStrategy('${strategy.strategy_id}', '${strategy.strategy_name}')">删除</button>
             </div>
         </div>
     `).join('');
@@ -184,93 +149,52 @@ async function loadStrategies() {
 
 async function runStrategy(strategyId, mode) {
     if (mode === 'real') {
-        if (!confirm(`⚠️ Are you sure you want to start REAL trading for this strategy?\n\nThis will use real funds and execute real trades.`)) {
+        if (!confirm(`⚠️ 确定要启动实盘交易吗？\n\n这将使用真实资金并执行真实交易。`)) {
             return;
         }
     }
     
     try {
-        const result = await strategyManager.runStrategy(strategyId, mode, mode === 'real');
-        alert(`✅ Strategy started in ${mode} mode!`);
+        await strategyManager.runStrategy(strategyId, mode, mode === 'real');
+        const modeText = mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟' : '实盘';
+        alert(`✅ 策略已在${modeText}模式下启动！`);
         loadStrategies();
     } catch (error) {
-        alert(`❌ Error: ${error.message}`);
+        alert(`❌ 错误：${error.message}`);
     }
 }
 
 function editStrategy(strategyId) {
-    // Redirect to config page with strategy ID
-    window.location.href = `config.html?strategy=${strategyId}`;
+    // Redirect to strategy detail page
+    window.location.href = `strategy-detail.html?id=${strategyId}`;
 }
 
-document.getElementById('createStrategyBtn').addEventListener('click', async () => {
-    const name = prompt('Enter strategy name:');
+async function deleteStrategy(strategyId, strategyName) {
+    const result = await strategyManager.deleteStrategy(strategyId, strategyName);
+    if (result) {
+        alert('✅ 策略已成功删除');
+        loadStrategies(); // Reload the strategy list
+    }
+}
+
+document.getElementById('createStrategyBtn')?.addEventListener('click', async () => {
+    const name = prompt('请输入策略名称:');
     if (!name) return;
     
-    const description = prompt('Enter strategy description (optional):') || '';
+    const description = prompt('请输入策略描述（可选）:') || '';
     
     try {
         const result = await strategyManager.createStrategy(name, description);
-        alert(`✅ Strategy created: ${result.strategy_id}`);
+        alert(`✅ 策略创建成功：${result.strategy_id}`);
         loadStrategies();
     } catch (error) {
-        alert(`❌ Error: ${error.message}`);
+        alert(`❌ 错误：${error.message}`);
     }
-});
-
-// Load services status
-async function loadServicesStatus() {
-    const status = await strategyManager.getServicesStatus();
-    strategyManager.updateServicesStatus(status);
-}
-
-// Start MCP services
-document.getElementById('startMCPServicesBtn').addEventListener('click', async () => {
-    try {
-        const btn = document.getElementById('startMCPServicesBtn');
-        btn.textContent = 'Starting...';
-        btn.disabled = true;
-        
-        const result = await strategyManager.startMCPServices();
-        alert(result.message || '✅ MCP services started');
-        await loadServicesStatus();
-        
-        btn.textContent = 'Start MCP Services';
-        btn.disabled = false;
-    } catch (error) {
-        alert(`❌ Error: ${error.message}`);
-        const btn = document.getElementById('startMCPServicesBtn');
-        btn.textContent = 'Start MCP Services';
-        btn.disabled = false;
-    }
-});
-
-// Stop MCP services
-document.getElementById('stopMCPServicesBtn').addEventListener('click', async () => {
-    if (!confirm('Are you sure you want to stop all MCP services?')) {
-        return;
-    }
-    
-    try {
-        const result = await strategyManager.stopMCPServices();
-        alert(result.message || '✅ MCP services stopped');
-        await loadServicesStatus();
-    } catch (error) {
-        alert(`❌ Error: ${error.message}`);
-    }
-});
-
-// Refresh services status
-document.getElementById('refreshServicesBtn').addEventListener('click', async () => {
-    await loadServicesStatus();
 });
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Strategy Manager initialized');
     loadStrategies();
-    loadServicesStatus();
-    
-    // Auto-refresh services status every 10 seconds
-    setInterval(loadServicesStatus, 10000);
 });
 

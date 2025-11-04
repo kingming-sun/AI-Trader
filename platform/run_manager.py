@@ -127,4 +127,72 @@ class RunManager:
             "config_file": str(config_file),
             "status": "running"
         }
+    
+    def get_run_results(self, strategy_id: str, mode: str) -> Optional[Dict]:
+        """
+        Get execution results for a strategy in a specific mode
+        
+        Args:
+            strategy_id: Strategy identifier
+            mode: Trading mode (backtest, simulate, real)
+            
+        Returns:
+            Dictionary containing results data or None if no results
+        """
+        try:
+            # Get data path for the strategy
+            data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
+            agent_data_dir = data_path / "agent_data"
+            
+            if not agent_data_dir.exists():
+                return None
+            
+            results = {
+                "asset_evolution": None,
+                "portfolio": None,
+                "metrics": None,
+                "trades": []
+            }
+            
+            # Load asset evolution data
+            asset_file = agent_data_dir / "asset_evolution.json"
+            if asset_file.exists():
+                with open(asset_file, 'r', encoding='utf-8') as f:
+                    asset_data = json.load(f)
+                    results["asset_evolution"] = asset_data
+                    
+                    # Calculate metrics from asset data
+                    if asset_data and len(asset_data) > 0:
+                        initial_value = asset_data[0].get("total_value", 10000)
+                        current_value = asset_data[-1].get("total_value", initial_value)
+                        results["metrics"] = {
+                            "initial_value": initial_value,
+                            "current_value": current_value,
+                            "total_return": ((current_value - initial_value) / initial_value) * 100,
+                            "num_trades": len(asset_data) - 1,
+                            "start_date": asset_data[0].get("date"),
+                            "end_date": asset_data[-1].get("date")
+                        }
+            
+            # Load portfolio data
+            portfolio_file = agent_data_dir / "portfolio.json"
+            if portfolio_file.exists():
+                with open(portfolio_file, 'r', encoding='utf-8') as f:
+                    results["portfolio"] = json.load(f)
+            
+            # Load trades data
+            trades_file = agent_data_dir / "trades.json"
+            if trades_file.exists():
+                with open(trades_file, 'r', encoding='utf-8') as f:
+                    results["trades"] = json.load(f)
+            
+            # Check if we have any data
+            if not any([results["asset_evolution"], results["portfolio"], results["trades"]]):
+                return None
+            
+            return results
+            
+        except Exception as e:
+            print(f"Error loading results for {strategy_id}/{mode}: {e}")
+            return None
 

@@ -277,4 +277,34 @@ When you think your task is complete, output
             
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
+    
+    def delete_strategy(self, strategy_id: str) -> bool:
+        """
+        Delete a strategy and all its data
+        
+        Args:
+            strategy_id: Strategy identifier
+            
+        Returns:
+            True if deletion successful, False otherwise
+        """
+        import shutil
+        
+        try:
+            # Delete strategy config directory
+            strategy_config_dir = self.strategies_dir / strategy_id
+            if strategy_config_dir.exists():
+                shutil.rmtree(strategy_config_dir)
+                print(f"Deleted strategy config: {strategy_config_dir}")
+            
+            # Delete strategy data directory
+            strategy_data_dir = self.data_dir / strategy_id
+            if strategy_data_dir.exists():
+                shutil.rmtree(strategy_data_dir)
+                print(f"Deleted strategy data: {strategy_data_dir}")
+            
+            return True
+        except Exception as e:
+            print(f"Error deleting strategy {strategy_id}: {e}")
+            return False
 

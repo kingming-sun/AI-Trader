@@ -62,6 +62,40 @@ def get_strategy(strategy_id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/strategies/<strategy_id>', methods=['DELETE'])
+def delete_strategy(strategy_id):
+    """Delete a strategy and all its data"""
+    try:
+        # Check if strategy is running
+        try:
+            base_config = strategy_manager.get_strategy_config(strategy_id, "backtest")
+            strategy_status = base_config.get('status', 'design')
+            
+            if strategy_status in ['backtest', 'simulate', 'real']:
+                return jsonify({
+                    "success": False,
+                    "error": f"Cannot delete strategy in '{strategy_status}' status. Please stop it first."
+                }), 400
+        except Exception as e:
+            # If config doesn't exist, still allow deletion
+            print(f"Warning: Could not check strategy status: {e}")
+        
+        # Delete strategy
+        result = strategy_manager.delete_strategy(strategy_id)
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "message": f"Strategy {strategy_id} deleted successfully"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to delete strategy"
+            }), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/strategies/<strategy_id>/config/<mode>', methods=['GET'])
 def get_strategy_config(strategy_id, mode):
     """Get strategy configuration for a specific mode"""
@@ -70,7 +104,40 @@ def get_strategy_config(strategy_id, mode):
             return jsonify({"success": False, "error": "Invalid mode"}), 400
         
         config = strategy_manager.get_strategy_config(strategy_id, mode)
-        return jsonify({"success": True, "config": config})
+        
+        # Ensure the config has the expected structure
+        # Frontend expects: { agent_config: {...}, date_range: {...} }
+        result_config = {
+            "agent_config": config.get("agent_config", {
+                "max_steps": 30,
+                "max_retries": 3,
+                "base_delay": 1.0,
+                "initial_cash": 10000
+            }),
+            "date_range": config.get("date_range", {
+                "init_date": "",
+                "end_date": ""
+            })
+        }
+        
+        return jsonify({"success": True, "config": result_config})
+    except FileNotFoundError:
+        # Strategy not found, return default config
+        return jsonify({
+            "success": True,
+            "config": {
+                "agent_config": {
+                    "max_steps": 30,
+                    "max_retries": 3,
+                    "base_delay": 1.0,
+                    "initial_cash": 10000
+                },
+                "date_range": {
+                    "init_date": "",
+                    "end_date": ""
+                }
+            }
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -188,6 +255,148 @@ def stop_mcp_services():
     try:
         result = service_manager.stop_mcp_services()
         return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/strategies/<strategy_id>/results/<mode>', methods=['GET'])
+def get_strategy_results(strategy_id, mode):
+    """Get strategy execution results for a specific mode"""
+    try:
+        if mode not in ["backtest", "simulate", "real"]:
+            return jsonify({"success": False, "error": "Invalid mode"}), 400
+        
+        # Get results from run manager
+        results = run_manager.get_run_results(strategy_id, mode)
+        
+        if results is None:
+            return jsonify({
+                "success": True,
+                "has_data": False,
+                "message": f"No results available for {mode} mode"
+            })
+        
+        return jsonify({
+            "success": True,
+            "has_data": True,
+            "results": results
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/strategies/<strategy_id>/logs/dates/<mode>', methods=['GET'])
+def get_log_dates(strategy_id, mode):
+    """Get available log dates for a strategy in a specific mode"""
+    try:
+        if mode not in ["backtest", "simulate", "real"]:
+            return jsonify({"success": False, "error": "Invalid mode"}), 400
+        
+        # Try multiple possible log paths
+        # 1. New strategy structure: data/strategies/{strategy_id}/{mode}/agent_data/{signature}/log/
+        # 2. Old structure: data/data/agent_data/{signature}/log/
+        # 3. Direct structure: data/strategies/{strategy_id}/{mode}/agent_data/log/
+        
+        project_root = strategy_manager.project_root
+        dates = []
+        
+        # Try new strategy structure first
+        strategy_log_path = strategy_manager.get_strategy_data_path(strategy_id, mode) / "log"
+        if strategy_log_path.exists():
+            for date_dir in strategy_log_path.iterdir():
+                if date_dir.is_dir() and (date_dir / "log.jsonl").exists():
+                    dates.append(date_dir.name)
+        
+        # Try old structure: data/data/agent_data/{signature}/log/
+        # This is for backward compatibility with existing data
+        old_log_base = project_root / "data" / "data" / "agent_data"
+        if old_log_base.exists():
+            for signature_dir in old_log_base.iterdir():
+                if signature_dir.is_dir():
+                    old_log_dir = signature_dir / "log"
+                    if old_log_dir.exists():
+                        for date_dir in old_log_dir.iterdir():
+                            if date_dir.is_dir() and (date_dir / "log.jsonl").exists():
+                                if date_dir.name not in dates:
+                                    dates.append(date_dir.name)
+        
+        # Remove duplicates and sort
+        dates = sorted(list(set(dates)))
+        return jsonify({"success": True, "dates": dates})
+    except Exception as e:
+        import traceback
+        print(f"Error getting log dates: {e}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/strategies/<strategy_id>/logs/<mode>/<date>', methods=['GET'])
+def get_log_content(strategy_id, mode, date):
+    """Get log content for a specific date"""
+    try:
+        if mode not in ["backtest", "simulate", "real"]:
+            return jsonify({"success": False, "error": "Invalid mode"}), 400
+        
+        project_root = strategy_manager.project_root
+        log_file = None
+        
+        # Try new strategy structure first
+        strategy_log_file = strategy_manager.get_strategy_data_path(strategy_id, mode) / "log" / date / "log.jsonl"
+        if strategy_log_file.exists():
+            log_file = strategy_log_file
+        
+        # Try old structure: data/data/agent_data/{signature}/log/{date}/log.jsonl
+        if log_file is None or not log_file.exists():
+            old_log_base = project_root / "data" / "data" / "agent_data"
+            if old_log_base.exists():
+                for signature_dir in old_log_base.iterdir():
+                    if signature_dir.is_dir():
+                        old_log_file = signature_dir / "log" / date / "log.jsonl"
+                        if old_log_file.exists():
+                            log_file = old_log_file
+                            break
+        
+        if log_file is None or not log_file.exists():
+            return jsonify({"success": True, "logs": []})
+        
+        # Read log file (JSONL format)
+        logs = []
+        with open(log_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    log_entry = json.loads(line)
+                    logs.append(log_entry)
+                except json.JSONDecodeError:
+                    continue
+        
+        return jsonify({"success": True, "logs": logs})
+    except Exception as e:
+        import traceback
+        print(f"Error getting log content: {e}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/restart-service', methods=['POST'])
+def restart_service():
+    """Restart the main service to apply new configuration"""
+    try:
+        data = request.get_json()
+        strategy_id = data.get('strategy_id')
+        
+        # TODO: Implement service restart logic
+        # This would typically:
+        # 1. Stop the current main.py process if running
+        # 2. Start a new main.py process with updated config
+        
+        import subprocess
+        import sys
+        
+        # For now, return a message that restart needs to be done manually
+        return jsonify({
+            "success": True,
+            "message": "Please restart the service manually to apply configuration changes",
+            "manual_command": f"python main.py --strategy {strategy_id}" if strategy_id else "python main.py"
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
