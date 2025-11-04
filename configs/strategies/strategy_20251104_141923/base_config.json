@@ -12,7 +12,7 @@
   "models": [
     {
       "name": "deepseek-chat-v3.1",
-      "basemodel": "deepseek/deepseek-chat-v3.1",
+      "basemodel": "deepseek-chat",
       "signature": "deepseek-chat-v3.1",
       "enabled": true
     }
@@ -26,5 +26,5 @@
   "log_config": {
     "log_path": "./data/strategies/strategy_20251104_141923"
   },
-  "updated_at": "2025-11-04T17:39:42.300023"
+  "updated_at": "2025-11-04T18:01:57.192523"
 }

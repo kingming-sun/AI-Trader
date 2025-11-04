@@ -1,0 +1,37 @@
+[
+  {
+    "date": "2025-10-20",
+    "total_value": 10000,
+    "cash": 10000,
+    "stock_value": 0,
+    "return_rate": 0.0
+  },
+  {
+    "date": "2025-10-21",
+    "total_value": 8000,
+    "cash": 7000,
+    "stock_value": 1000,
+    "return_rate": -20.0
+  },
+  {
+    "date": "2025-10-22",
+    "total_value": 6000,
+    "cash": 4500,
+    "stock_value": 1500,
+    "return_rate": -40.0
+  },
+  {
+    "date": "2025-10-23",
+    "total_value": 7500,
+    "cash": 6500,
+    "stock_value": 1000,
+    "return_rate": -25.0
+  },
+  {
+    "date": "2025-10-24",
+    "total_value": 8700,
+    "cash": 8000,
+    "stock_value": 700,
+    "return_rate": -13.0
+  }
+]

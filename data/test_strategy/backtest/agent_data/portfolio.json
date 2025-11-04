@@ -1,0 +1,27 @@
+{
+  "date": "2025-10-24",
+  "holdings": [
+    {
+      "symbol": "AAPL",
+      "shares": 5,
+      "avg_cost": 100,
+      "current_price": 100,
+      "market_value": 500,
+      "profit_loss": 0,
+      "profit_loss_rate": 0
+    },
+    {
+      "symbol": "GOOGL",
+      "shares": 2,
+      "avg_cost": 100,
+      "current_price": 100,
+      "market_value": 200,
+      "profit_loss": 0,
+      "profit_loss_rate": 0
+    }
+  ],
+  "cash": 8000,
+  "total_value": 8700,
+  "stock_ratio": 8.045977011494253,
+  "cash_ratio": 91.95402298850574
+}

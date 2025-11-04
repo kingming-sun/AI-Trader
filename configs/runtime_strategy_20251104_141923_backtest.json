@@ -6,13 +6,13 @@
   "status": "backtest",
   "agent_type": "BaseAgent",
   "date_range": {
-    "init_date": "2025-11-01",
-    "end_date": "2025-11-04"
+    "init_date": "2025-10-20",
+    "end_date": "2025-10-27"
   },
   "models": [
     {
       "name": "deepseek-chat-v3.1",
-      "basemodel": "deepseek/deepseek-chat-v3.1",
+      "basemodel": "deepseek-chat",
       "signature": "deepseek-chat-v3.1",
       "enabled": true
     }
@@ -26,5 +26,5 @@
   "log_config": {
     "log_path": "./data/strategies/strategy_20251104_141923"
   },
-  "updated_at": "2025-11-04T17:28:24.044801"
+  "updated_at": "2025-11-04T17:39:42.300023"
 }

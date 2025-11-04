@@ -1,0 +1,118 @@
+{
+  "summary": {
+    "initial_cash": 10000,
+    "final_value": 8700,
+    "total_return": -13.0,
+    "total_trades": 4,
+    "date_range": {
+      "start": "2025-10-20",
+      "end": "2025-10-24"
+    }
+  },
+  "asset_evolution": [
+    {
+      "date": "2025-10-20",
+      "total_value": 10000,
+      "cash": 10000,
+      "stock_value": 0,
+      "return_rate": 0.0
+    },
+    {
+      "date": "2025-10-21",
+      "total_value": 8000,
+      "cash": 7000,
+      "stock_value": 1000,
+      "return_rate": -20.0
+    },
+    {
+      "date": "2025-10-22",
+      "total_value": 6000,
+      "cash": 4500,
+      "stock_value": 1500,
+      "return_rate": -40.0
+    },
+    {
+      "date": "2025-10-23",
+      "total_value": 7500,
+      "cash": 6500,
+      "stock_value": 1000,
+      "return_rate": -25.0
+    },
+    {
+      "date": "2025-10-24",
+      "total_value": 8700,
+      "cash": 8000,
+      "stock_value": 700,
+      "return_rate": -13.0
+    }
+  ],
+  "portfolio": {
+    "date": "2025-10-24",
+    "holdings": [
+      {
+        "symbol": "AAPL",
+        "shares": 5,
+        "avg_cost": 100,
+        "current_price": 100,
+        "market_value": 500,
+        "profit_loss": 0,
+        "profit_loss_rate": 0
+      },
+      {
+        "symbol": "GOOGL",
+        "shares": 2,
+        "avg_cost": 100,
+        "current_price": 100,
+        "market_value": 200,
+        "profit_loss": 0,
+        "profit_loss_rate": 0
+      }
+    ],
+    "cash": 8000,
+    "total_value": 8700,
+    "stock_ratio": 8.045977011494253,
+    "cash_ratio": 91.95402298850574
+  },
+  "trades": [
+    {
+      "date": "2025-10-21",
+      "time": "09:30:00",
+      "symbol": "AAPL",
+      "action": "BUY",
+      "shares": 10,
+      "price": 100,
+      "amount": 1000,
+      "status": "SUCCESS"
+    },
+    {
+      "date": "2025-10-22",
+      "time": "09:30:00",
+      "symbol": "GOOGL",
+      "action": "BUY",
+      "shares": 5,
+      "price": 100,
+      "amount": 500,
+      "status": "SUCCESS"
+    },
+    {
+      "date": "2025-10-23",
+      "time": "09:30:00",
+      "symbol": "AAPL",
+      "action": "SELL",
+      "shares": 5,
+      "price": 100,
+      "amount": 500,
+      "status": "SUCCESS"
+    },
+    {
+      "date": "2025-10-24",
+      "time": "09:30:00",
+      "symbol": "GOOGL",
+      "action": "SELL",
+      "shares": 3,
+      "price": 100,
+      "amount": 300,
+      "status": "SUCCESS"
+    }
+  ]
+}

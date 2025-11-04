@@ -63,7 +63,8 @@ def generate_asset_evolution(positions: List[Dict[str, Any]], initial_cash: floa
     
     for i, pos_data in enumerate(positions):
         date = pos_data.get("date", datetime.now().strftime("%Y-%m-%d"))
-        position = pos_data.get("position", {})
+        # Support both "position" and "positions" field names
+        position = pos_data.get("positions", pos_data.get("position", {}))
         cash = position.get("CASH", initial_cash)
         
         # Calculate stock value (simplified - using placeholder prices)
@@ -100,7 +101,8 @@ def generate_portfolio(positions: List[Dict[str, Any]], initial_cash: float = 10
     
     latest_position = positions[-1]
     date = latest_position.get("date", datetime.now().strftime("%Y-%m-%d"))
-    position = latest_position.get("position", {})
+    # Support both "position" and "positions" field names
+    position = latest_position.get("positions", latest_position.get("position", {}))
     
     holdings = []
     # Use initial_cash if CASH is 0 or missing
@@ -144,8 +146,9 @@ def extract_trades_from_positions(positions: List[Dict[str, Any]]) -> List[Dict[
         return trades
     
     for i in range(1, len(positions)):
-        prev_pos = positions[i-1].get("position", {})
-        curr_pos = positions[i].get("position", {})
+        # Support both "position" and "positions" field names
+        prev_pos = positions[i-1].get("positions", positions[i-1].get("position", {}))
+        curr_pos = positions[i].get("positions", positions[i].get("position", {}))
         date = positions[i].get("date", datetime.now().strftime("%Y-%m-%d"))
         
         # Check for changes in each symbol
