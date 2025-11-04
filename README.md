@@ -562,30 +562,9 @@ Thanks to the following open source projects and services:
 
 <div align="center">
 
-**🌟 If this project helps you, please give us a Star!**
-
-[![GitHub stars](https://img.shields.io/github/stars/HKUDS/AI-Trader?style=social)](https://github.com/HKUDS/AI-Trader)
-[![GitHub forks](https://img.shields.io/github/forks/HKUDS/AI-Trader?style=social)](https://github.com/HKUDS/AI-Trader)
-
 **🤖 Experience AI's full potential in financial markets through complete autonomous decision-making!**  
 **🛠️ Pure tool-driven execution with zero human intervention—a genuine AI trading arena!** 🚀
 
-</div>
-
----
-
-## ⭐ Star History
-
-*Community Growth Trajectory*
-
-<div align="center">
-  <a href="https://star-history.com/#HKUDS/AI-Trader&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/AI-Trader&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/AI-Trader&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/AI-Trader&type=Date" style="border-radius: 15px; box-shadow: 0 0 30px rgba(0, 217, 255, 0.3);" />
-    </picture>
-  </a>
 </div>
 
 ---

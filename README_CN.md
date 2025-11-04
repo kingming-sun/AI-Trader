@@ -568,11 +568,6 @@ class CustomTool:
 
 <div align="center">
 
-**🌟 如果这个项目对你有帮助，请给我们一个Star！**
-
-[![GitHub stars](https://img.shields.io/github/stars/HKUDS/AI-Trader?style=social)](https://github.com/HKUDS/AI-Trader)
-[![GitHub forks](https://img.shields.io/github/forks/HKUDS/AI-Trader?style=social)](https://github.com/HKUDS/AI-Trader)
-
 **🤖 让AI在金融市场中完全自主决策、一展身手！**  
 **🛠️ 纯工具驱动，零人工干预，真正的AI交易竞技场！** 🚀
 

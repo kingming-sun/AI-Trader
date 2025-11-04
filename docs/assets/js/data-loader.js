@@ -14,10 +14,11 @@ class DataLoader {
         try {
             // Since we can't directly list directories in the browser,
             // we'll try to load known agents based on common patterns
+            // Only check agents that might actually exist
             const potentialAgents = [
+                'deepseek-chat-v3.1',
                 'gemini-2.5-flash',
                 'qwen3-max',
-                'deepseek-chat-v3.1',
                 'gpt-5',
                 'claude-3.7-sonnet',
             ];
@@ -28,16 +29,23 @@ class DataLoader {
                     console.log(`Checking agent: ${agent}`);
                     const response = await fetch(`${this.baseDataPath}/agent_data/${agent}/position/position.jsonl`);
                     if (response.ok) {
-                        agents.push(agent);
-                        console.log(`Added agent: ${agent}`);
+                        // Double check: read at least one line to ensure data exists
+                        const text = await response.text();
+                        if (text.trim().length > 0) {
+                            agents.push(agent);
+                            console.log(`✅ Added agent: ${agent}`);
+                        } else {
+                            console.log(`⚠️  Agent ${agent} file is empty, skipping`);
+                        }
                     } else {
-                        console.log(`Agent ${agent} not found (status: ${response.status})`);
+                        console.log(`ℹ️  Agent ${agent} not found (status: ${response.status}), skipping`);
                     }
                 } catch (e) {
-                    console.log(`Agent ${agent} error:`, e.message);
+                    console.log(`❌ Agent ${agent} error:`, e.message);
                 }
             }
 
+            console.log(`📊 Found ${agents.length} active agent(s):`, agents);
             return agents;
         } catch (error) {
             console.error('Error loading agent list:', error);
