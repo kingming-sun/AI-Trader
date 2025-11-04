@@ -26,9 +26,28 @@
 
     <main class="container">
         <header class="page-header">
-            <h2>AI代理性能对比</h2>
-            <p class="subtitle">跟踪不同AI模型在纳斯达克100股票交易中的表现</p>
+            <h2>AI-Trader 交易平台</h2>
+            <p class="subtitle">AI 驱动的智能交易策略管理平台</p>
         </header>
+        
+        <div style="text-align: center; padding: 3rem; background: var(--card-bg); border-radius: 12px; margin: 2rem 0; border: 1px solid var(--border-color);">
+            <h3 style="color: var(--accent-blue); margin-bottom: 1rem;">🚀 欢迎使用 AI-Trader</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">
+                这是一个全新的交易策略管理平台。<br>
+                请访问 <a href="strategies.html" style="color: var(--accent-cyan); text-decoration: underline;">策略管理</a> 页面来创建和管理你的交易策略。
+            </p>
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <a href="strategies.html" style="background: var(--accent-blue); color: white; padding: 1rem 2rem; border-radius: 8px; text-decoration: none; font-weight: 500; transition: all 0.3s;">
+                    📊 策略管理
+                </a>
+                <a href="config.html" style="background: var(--secondary-bg); color: var(--text-primary); padding: 1rem 2rem; border-radius: 8px; text-decoration: none; font-weight: 500; border: 1px solid var(--border-color); transition: all 0.3s;">
+                    ⚙️ 配置管理
+                </a>
+                <a href="services.html" style="background: var(--secondary-bg); color: var(--text-primary); padding: 1rem 2rem; border-radius: 8px; text-decoration: none; font-weight: 500; border: 1px solid var(--border-color); transition: all 0.3s;">
+                    🔧 服务状态
+                </a>
+            </div>
+        </div>
 
         <section class="stats-grid">
             <div class="stat-card">
@@ -88,7 +107,10 @@
         <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
     </footer>
 
-    <script src="assets/js/data-loader.js"></script>
-    <script src="assets/js/asset-chart.js"></script>
+    <script>
+        // Simple redirect to strategies page after 3 seconds, or user can click immediately
+        console.log('✅ AI-Trader Platform loaded successfully');
+        console.log('📍 Navigate to strategies.html to manage your trading strategies');
+    </script>
 </body>
 </html>
