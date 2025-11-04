@@ -106,6 +106,15 @@
             }
         }
         
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+        
         /* Config Tab Styles */
         .config-section {
             background: var(--card-bg);
@@ -380,6 +389,15 @@
                         <input type="date" id="endDate">
                     </div>
                 </div>
+                <div id="dataAvailabilityHint" style="margin-top: 1rem; padding: 0.75rem; background: var(--secondary-bg); border-radius: 6px; display: none;">
+                    <div style="color: var(--accent-cyan); font-weight: 600; margin-bottom: 0.5rem;">📁 数据源说明</div>
+                    <div id="availableRangeText" style="color: var(--text-primary);">--</div>
+                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(0, 212, 255, 0.1); border-radius: 4px; border: 1px solid rgba(0, 212, 255, 0.3);">
+                        <div style="color: var(--accent-cyan); font-size: 0.9rem;">
+                            ✨ 智能数据获取：系统优先使用本地数据，如果缺失会自动从 Alpha Vantage API 获取
+                        </div>
+                    </div>
+                </div>
                 <p class="mode-hint" style="display: none; color: var(--text-muted); margin-top: 1rem; padding: 0.75rem; background: var(--secondary-bg); border-radius: 6px;">
                     ℹ️ 实时运行，无需设置日期范围
                 </p>
@@ -417,6 +435,35 @@
                 <button class="btn-danger" id="runRealBtn" style="display: none;">
                     ⚡ 开始实盘
                 </button>
+            </div>
+            
+            <!-- 运行状态和进度显示 -->
+            <div id="runStatusContainer" style="display: none; margin: 1.5rem 0; padding: 1.5rem; background: var(--secondary-bg); border-radius: 8px; border-left: 4px solid var(--accent-blue);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-blue);">
+                            <span id="runStatusIcon">⏳</span> <span id="runStatusText">策略运行中...</span>
+                        </h4>
+                        <p id="runStatusMessage" style="margin: 0; color: var(--text-secondary); font-size: 0.875rem;">
+                            正在检查运行状态...
+                        </p>
+                    </div>
+                    <button class="btn-secondary" id="stopRunBtn" style="display: none;">
+                        ⏹️ 停止运行
+                    </button>
+                </div>
+                
+                <!-- 进度指示器 -->
+                <div id="runProgressBar" style="width: 100%; height: 8px; background: var(--card-bg); border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
+                    <div id="runProgressFill" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); transition: width 0.3s ease; animation: pulse 2s infinite;"></div>
+                </div>
+                
+                <!-- 实时日志显示 -->
+                <div id="runLogContainer" style="max-height: 300px; overflow-y: auto; background: var(--card-bg); border-radius: 6px; padding: 1rem; font-family: 'Courier New', monospace; font-size: 0.8rem;">
+                    <div id="runLogContent" style="color: var(--text-primary); white-space: pre-wrap; word-break: break-word;">
+                        <div style="color: var(--text-muted);">等待日志输出...</div>
+                    </div>
+                </div>
             </div>
             
             <div class="metrics-grid">

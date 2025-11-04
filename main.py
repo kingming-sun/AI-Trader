@@ -189,7 +189,25 @@ async def main(config_path=None):
 
 
             # Get log path configuration
-            log_path = log_config.get("log_path", "./data/agent_data")
+            # Check if running from run_manager with new directory structure
+            strategy_id = os.getenv("STRATEGY_ID")
+            trading_mode = os.getenv("TRADING_MODE", "backtest")
+            data_path = os.getenv("DATA_PATH")
+            
+            if data_path:
+                # Use the path provided by run_manager
+                log_path = data_path
+            elif strategy_id:
+                # Construct path based on new architecture
+                log_path = f"./data/strategies/{strategy_id}/{trading_mode}/agent_data"
+            else:
+                # Fallback to old structure (for backward compatibility)
+                log_path = f"./data/strategies/{signature}"
+            
+            # Ensure directory exists
+            from pathlib import Path
+            Path(log_path).mkdir(parents=True, exist_ok=True)
+            print(f"📂 Using data path: {log_path}")
 
             try:
                 # Dynamically create Agent instance
@@ -221,6 +239,15 @@ async def main(config_path=None):
                 print(f"   - Latest date: {summary.get('latest_date')}")
                 print(f"   - Total records: {summary.get('total_records')}")
                 print(f"   - Cash balance: ${summary.get('positions', {}).get('CASH', 0):.2f}")
+                
+                # Generate result files for the new architecture
+                print("📝 Generating result files...")
+                from tools.result_generator import generate_result_files
+                try:
+                    generate_result_files(log_path, initial_cash)
+                    print("✅ Result files generated successfully")
+                except Exception as e:
+                    print(f"⚠️  Failed to generate result files: {e}")
                 
             except Exception as e:
                 print(f"❌ Error processing model {model_name} ({signature}): {str(e)}")

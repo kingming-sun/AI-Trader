@@ -10,6 +10,8 @@ class StrategyDetail {
         this.currentTab = 'config';
         this.assetChart = null;
         this.allocationChart = null;
+        this.statusCheckInterval = null; // 状态检查定时器
+        this.isRunning = false; // 是否正在运行
     }
 
     // Get strategy ID from URL parameters
@@ -43,6 +45,27 @@ class StrategyDetail {
         
         // Load initial data based on active tab
         this.loadTabContent(this.currentTab);
+        
+        // Check if there's a running strategy when loading asset tab
+        if (this.currentTab === 'asset') {
+            this.checkRunStatusOnLoad();
+        }
+    }
+    
+    // Check run status on page load
+    async checkRunStatusOnLoad() {
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/status/${this.currentMode}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.status.is_running) {
+                    this.showRunStatus(this.currentMode);
+                    this.startStatusMonitoring(this.currentMode);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking run status on load:', error);
+        }
     }
 
     // Load strategy basic information
@@ -158,6 +181,7 @@ class StrategyDetail {
         if (!dateRangeSection) return;
         
         const hint = dateRangeSection.querySelector('.mode-hint');
+        const dataHint = document.getElementById('dataAvailabilityHint');
         const inputs = dateRangeSection.querySelectorAll('input[type="date"]');
         
         if (this.currentConfigMode === 'backtest') {
@@ -165,6 +189,12 @@ class StrategyDetail {
             dateRangeSection.style.display = 'block';
             if (hint) hint.style.display = 'none';
             inputs.forEach(input => input.disabled = false);
+            
+            // Show data availability hint and load range
+            if (dataHint) {
+                dataHint.style.display = 'block';
+                this.loadAvailableDataRange();
+            }
         } else {
             // Hide date range inputs for simulate/real
             dateRangeSection.style.display = 'block'; // Keep section visible but show hint
@@ -173,6 +203,52 @@ class StrategyDetail {
                 input.disabled = true;
                 input.value = ''; // Clear values
             });
+            
+            // Hide data availability hint
+            if (dataHint) {
+                dataHint.style.display = 'none';
+            }
+        }
+    }
+    
+    // Load available data range from server
+    async loadAvailableDataRange() {
+        try {
+            const response = await fetch(`${this.apiBase}/api/data/available-range`);
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const rangeText = document.getElementById('availableRangeText');
+            
+            if (rangeText) {
+                if (data.available) {
+                    rangeText.innerHTML = `
+                        <div><strong>本地数据范围：</strong></div>
+                        <div style="padding-left: 1rem;">
+                            <div>开始: ${data.start_date}</div>
+                            <div>结束: ${data.end_date}</div>
+                        </div>
+                    `;
+                    
+                    // Set min/max attributes on date inputs
+                    const startInput = document.getElementById('startDate');
+                    const endInput = document.getElementById('endDate');
+                    
+                    if (startInput && endInput) {
+                        startInput.min = data.start_date;
+                        startInput.max = data.end_date;
+                        endInput.min = data.start_date;
+                        endInput.max = data.end_date;
+                    }
+                } else {
+                    rangeText.innerHTML = `
+                        <div style="color: var(--warning);">⚠️ 本地没有缓存数据</div>
+                        <div style="margin-top: 0.5rem; font-size: 0.9rem;">将完全依赖 API 获取数据（可能较慢）</div>
+                    `;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading available data range:', error);
         }
     }
     
@@ -293,7 +369,16 @@ class StrategyDetail {
             
             // Use metrics from API or calculate from asset evolution
             if (results.metrics) {
-                this.updateAssetMetrics(results.metrics);
+                // Convert snake_case to camelCase for consistency
+                const metrics = {
+                    initialValue: results.metrics.initial_value || 10000,
+                    currentValue: results.metrics.current_value || results.metrics.initial_value || 10000,
+                    totalReturn: results.metrics.total_return || 0,
+                    maxDrawdown: results.metrics.max_drawdown || 0,
+                    sharpeRatio: results.metrics.sharpe_ratio || 0,
+                    tradingDays: results.metrics.num_trades || results.metrics.trading_days || 1
+                };
+                this.updateAssetMetrics(metrics);
             } else if (results.asset_evolution && results.asset_evolution.length > 0) {
                 // Calculate metrics from asset evolution data
                 const evolution = results.asset_evolution;
@@ -315,12 +400,12 @@ class StrategyDetail {
                 }
                 
                 this.updateAssetMetrics({
-                    initialValue: initialValue,
-                    currentValue: currentValue,
-                    totalReturn: totalReturn,
-                    maxDrawdown: maxDrawdown,
+                    initialValue: initialValue || 10000,
+                    currentValue: currentValue || initialValue || 10000,
+                    totalReturn: totalReturn || 0,
+                    maxDrawdown: maxDrawdown || 0,
                     sharpeRatio: 0, // TODO: Calculate Sharpe ratio
-                    tradingDays: evolution.length
+                    tradingDays: evolution.length || 1
                 });
             } else {
                 // Use placeholder data if no real data
@@ -529,32 +614,42 @@ class StrategyDetail {
         const metricsGrid = document.querySelector('#asset-tab .metrics-grid');
         if (!metricsGrid) return;
         
+        // Ensure all values are defined with defaults
+        const safeMetrics = {
+            initialValue: metrics.initialValue || 10000,
+            currentValue: metrics.currentValue || metrics.initialValue || 10000,
+            totalReturn: metrics.totalReturn || 0,
+            maxDrawdown: metrics.maxDrawdown || 0,
+            sharpeRatio: metrics.sharpeRatio || 0,
+            tradingDays: metrics.tradingDays || 1
+        };
+        
         metricsGrid.innerHTML = `
             <div class="metric-card">
                 <div class="metric-label">初始资金</div>
-                <div class="metric-value">$${metrics.initialValue.toLocaleString()}</div>
+                <div class="metric-value">$${safeMetrics.initialValue.toLocaleString()}</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">当前资产</div>
-                <div class="metric-value">$${metrics.currentValue.toLocaleString()}</div>
+                <div class="metric-value">$${safeMetrics.currentValue.toLocaleString()}</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">总收益率</div>
-                <div class="metric-value ${metrics.totalReturn >= 0 ? 'positive' : 'negative'}">
-                    ${metrics.totalReturn >= 0 ? '+' : ''}${metrics.totalReturn.toFixed(2)}%
+                <div class="metric-value ${safeMetrics.totalReturn >= 0 ? 'positive' : 'negative'}">
+                    ${safeMetrics.totalReturn >= 0 ? '+' : ''}${safeMetrics.totalReturn.toFixed(2)}%
                 </div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">最大回撤</div>
-                <div class="metric-value negative">${metrics.maxDrawdown.toFixed(2)}%</div>
+                <div class="metric-value negative">${safeMetrics.maxDrawdown.toFixed(2)}%</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">夏普比率</div>
-                <div class="metric-value">${metrics.sharpeRatio.toFixed(2)}</div>
+                <div class="metric-value">${safeMetrics.sharpeRatio.toFixed(2)}</div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">交易天数</div>
-                <div class="metric-value">${metrics.tradingDays}</div>
+                <div class="metric-value">${safeMetrics.tradingDays}</div>
             </div>
         `;
     }
@@ -848,6 +943,11 @@ class StrategyDetail {
         document.getElementById('runRealBtn')?.addEventListener('click', () => {
             this.runStrategy('real');
         });
+        
+        // Stop run button
+        document.getElementById('stopRunBtn')?.addEventListener('click', () => {
+            this.stopRun();
+        });
     }
 
     // Save configuration
@@ -944,31 +1044,247 @@ class StrategyDetail {
             
             if (!response.ok) {
                 const error = await response.json();
+                // Check if it's a data validation error
+                if (error.validation) {
+                    let message = error.error || `Failed to run ${mode}`;
+                    if (error.validation.suggested_range) {
+                        message += `\n\n建议使用日期范围：\n${error.validation.suggested_range.start} 到 ${error.validation.suggested_range.end}`;
+                    }
+                    if (error.validation.available_range) {
+                        message += `\n\n本地数据范围：\n${error.validation.available_range.start} 到 ${error.validation.available_range.end}`;
+                    }
+                    throw new Error(message);
+                }
                 throw new Error(error.error || `Failed to run ${mode}`);
             }
             
             const result = await response.json();
             const modeText = mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘';
             
-            alert(`✅ ${modeText}已启动！\n\n请稍后查看结果。`);
+            // Switch to asset tab to see results and status
+            this.switchTab('asset');
+            this.currentMode = mode;
+            // Update mode selector active state
+            document.querySelectorAll('#asset-tab .mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            // Update run buttons visibility
+            this.updateAssetRunButtonsVisibility();
             
-            // Switch to asset tab to see results
-            setTimeout(() => {
-                this.switchTab('asset');
-                this.currentMode = mode;
-                // Update mode selector active state
-                document.querySelectorAll('#asset-tab .mode-btn').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.mode === mode);
-                });
-                // Update run buttons visibility
-                this.updateAssetRunButtonsVisibility();
-                // Reload asset data
-                this.loadAssetData();
-            }, 1000);
+            // Show status container and start monitoring
+            this.showRunStatus(mode);
+            this.startStatusMonitoring(mode);
         } catch (error) {
             console.error(`Error running ${mode}:`, error);
             alert(`❌ 启动${mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘'}失败：${error.message}`);
         }
+    }
+    
+    // Show run status container
+    showRunStatus(mode) {
+        const container = document.getElementById('runStatusContainer');
+        if (!container) return;
+        
+        container.style.display = 'block';
+        this.isRunning = true;
+        
+        const modeText = mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘';
+        document.getElementById('runStatusText').textContent = `${modeText}运行中...`;
+        document.getElementById('runStatusIcon').textContent = '⏳';
+        document.getElementById('runStatusMessage').textContent = '正在启动策略...';
+        
+        // Show progress bar animation
+        const progressFill = document.getElementById('runProgressFill');
+        if (progressFill) {
+            progressFill.style.width = '30%';
+            progressFill.style.animation = 'pulse 2s infinite';
+        }
+        
+        // Clear log content
+        const logContent = document.getElementById('runLogContent');
+        if (logContent) {
+            logContent.innerHTML = '<div style="color: var(--text-muted);">等待日志输出...</div>';
+        }
+        
+        // Scroll to status container
+        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    
+    // Start monitoring run status
+    startStatusMonitoring(mode) {
+        // Clear existing interval
+        if (this.statusCheckInterval) {
+            clearInterval(this.statusCheckInterval);
+        }
+        
+        // Check status every 2 seconds
+        this.statusCheckInterval = setInterval(async () => {
+            await this.checkRunStatus(mode);
+        }, 2000);
+        
+        // Initial check
+        this.checkRunStatus(mode);
+    }
+    
+    // Stop status monitoring
+    stopStatusMonitoring() {
+        if (this.statusCheckInterval) {
+            clearInterval(this.statusCheckInterval);
+            this.statusCheckInterval = null;
+        }
+        this.isRunning = false;
+    }
+    
+    // Check run status
+    async checkRunStatus(mode) {
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/status/${mode}`);
+            if (!response.ok) {
+                throw new Error('Failed to check status');
+            }
+            
+            const data = await response.json();
+            if (!data.success) {
+                return;
+            }
+            
+            const status = data.status;
+            this.updateRunStatusDisplay(status, mode);
+            
+            // If not running and has results, stop monitoring and reload data
+            if (!status.is_running && status.status === 'completed') {
+                this.stopStatusMonitoring();
+                setTimeout(() => {
+                    this.loadAssetData();
+                    this.loadAvailableLogDates();
+                }, 1000);
+            } else if (!status.is_running && status.status === 'failed') {
+                this.stopStatusMonitoring();
+            }
+            
+        } catch (error) {
+            console.error('Error checking run status:', error);
+        }
+    }
+    
+    // Update run status display
+    updateRunStatusDisplay(status, mode) {
+        const statusIcon = document.getElementById('runStatusIcon');
+        const statusText = document.getElementById('runStatusText');
+        const statusMessage = document.getElementById('runStatusMessage');
+        const progressFill = document.getElementById('runProgressFill');
+        const logContent = document.getElementById('runLogContent');
+        const stopBtn = document.getElementById('stopRunBtn');
+        
+        if (!statusIcon || !statusText || !statusMessage) return;
+        
+        const modeText = mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘';
+        
+        if (status.is_running) {
+            // Running state
+            statusIcon.textContent = '⏳';
+            statusText.textContent = `${modeText}运行中...`;
+            statusMessage.textContent = status.message || '策略正在运行中...';
+            
+            if (progressFill) {
+                progressFill.style.width = '60%';
+                progressFill.style.animation = 'pulse 2s infinite';
+            }
+            
+            if (stopBtn) {
+                stopBtn.style.display = 'inline-block';
+            }
+            
+            // Update log content (only add new logs, avoid duplicates)
+            if (status.latest_log && logContent) {
+                const currentContent = logContent.innerHTML;
+                const logText = status.latest_log.trim();
+                
+                // Only add if it's a new log (simple check - not already in content)
+                if (!currentContent.includes(logText.substring(0, 50))) {
+                    const timestamp = new Date().toLocaleTimeString('zh-CN');
+                    const logEntry = `[${timestamp}] ${logText}`;
+                    const logDiv = document.createElement('div');
+                    logDiv.style.cssText = 'color: var(--accent-cyan); margin-bottom: 0.5rem; font-family: monospace;';
+                    logDiv.textContent = logEntry;
+                    logContent.appendChild(logDiv);
+                    
+                    // Auto scroll to bottom
+                    const logContainer = document.getElementById('runLogContainer');
+                    if (logContainer) {
+                        logContainer.scrollTop = logContainer.scrollHeight;
+                    }
+                }
+            }
+        } else if (status.status === 'completed') {
+            // Completed state
+            statusIcon.textContent = '✅';
+            statusText.textContent = `${modeText}已完成`;
+            statusMessage.textContent = status.message || '策略运行已完成，可以查看结果';
+            
+            if (progressFill) {
+                progressFill.style.width = '100%';
+                progressFill.style.animation = 'none';
+                progressFill.style.background = 'var(--success)';
+            }
+            
+            if (stopBtn) {
+                stopBtn.style.display = 'none';
+            }
+            
+            // Hide status container after 3 seconds
+            setTimeout(() => {
+                const container = document.getElementById('runStatusContainer');
+                if (container) {
+                    container.style.display = 'none';
+                }
+            }, 3000);
+        } else if (status.status === 'failed') {
+            // Failed state
+            statusIcon.textContent = '❌';
+            statusText.textContent = `${modeText}失败`;
+            statusMessage.textContent = status.message || '策略运行失败';
+            
+            if (progressFill) {
+                progressFill.style.width = '100%';
+                progressFill.style.animation = 'none';
+                progressFill.style.background = 'var(--danger)';
+            }
+            
+            if (stopBtn) {
+                stopBtn.style.display = 'none';
+            }
+        } else {
+            // Not started or unknown
+            statusIcon.textContent = '⏸️';
+            statusText.textContent = `${modeText}未启动`;
+            statusMessage.textContent = status.message || '策略未启动';
+            
+            if (progressFill) {
+                progressFill.style.width = '0%';
+            }
+            
+            if (stopBtn) {
+                stopBtn.style.display = 'none';
+            }
+        }
+    }
+    
+    // Escape HTML to prevent XSS
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Stop running strategy
+    async stopRun() {
+        if (!confirm('确定要停止运行中的策略吗？')) {
+            return;
+        }
+        
+        // TODO: Implement stop functionality
+        alert('停止功能开发中...');
     }
     
     // Restart service

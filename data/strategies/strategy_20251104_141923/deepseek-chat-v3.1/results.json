@@ -1,0 +1,30 @@
+{
+  "summary": {
+    "initial_cash": 10000,
+    "final_value": 10000,
+    "total_return": 0.0,
+    "total_trades": 0,
+    "date_range": {
+      "start": "2025-11-01",
+      "end": "2025-11-01"
+    }
+  },
+  "asset_evolution": [
+    {
+      "date": "2025-11-01",
+      "total_value": 10000,
+      "cash": 10000,
+      "stock_value": 0,
+      "return_rate": 0.0
+    }
+  ],
+  "portfolio": {
+    "date": "2025-11-01",
+    "holdings": [],
+    "cash": 0,
+    "total_value": 0,
+    "stock_ratio": 0,
+    "cash_ratio": 0
+  },
+  "trades": []
+}

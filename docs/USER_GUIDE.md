@@ -168,7 +168,10 @@ AI-Trader 采用分层架构设计，包含前端界面、后端 API、策略管
 **策略 API** (`platform/strategy_api.py`, 端口 8005):
 - 策略管理：创建、删除、列表、配置保存/加载
 - 策略运行：启动回测/模拟盘/实盘
+- **运行状态监控**：实时检查策略运行状态（运行中/已完成/失败）
+- **进程管理**：跟踪策略执行进程，提供进程ID和启动时间
 - 结果查询：获取资产演变、投资组合、日志数据
+- **AI思考日志**：按日期查询AI决策过程的详细日志
 - 服务管理：MCP 服务启动/停止、状态查询
 
 **配置 API** (`config_api.py`, 端口 8004):
@@ -189,6 +192,10 @@ AI-Trader 采用分层架构设计，包含前端界面、后端 API、策略管
 - 运行模式切换（回测/模拟盘/实盘）
 - 环境变量和配置文件的准备
 - 与 main.py 的集成
+- **运行状态检查**：使用 `psutil` 检查进程是否运行
+- **进程信息管理**：保存进程ID、启动时间到 `logs/{strategy_id}_{mode}_process.json`
+- **实时日志获取**：从日志文件读取最新AI思考日志并返回给前端
+- **结果数据加载**：从策略数据目录加载资产演变、投资组合、交易数据
 
 **服务管理器** (`platform/service_manager.py`):
 - MCP 服务进程管理
@@ -261,6 +268,7 @@ data/
 - `strategy_api.log` - 策略 API 日志
 - `config_api.log` - 配置 API 日志
 - `frontend.log` - 前端服务器日志
+- `{strategy_id}_{mode}_process.json` - 策略运行进程信息（进程ID、启动时间、状态）
 
 ### 运行模式
 
@@ -286,24 +294,56 @@ data/
 
 ### 数据流
 
+#### 策略执行数据流
 ```
 用户操作 (前端)
     ↓
-HTTP API 请求
+HTTP API 请求 (POST /api/strategies/{id}/run/{mode})
     ↓
-API 服务层 (Flask)
+API 服务层 (strategy_api.py)
     ↓
-业务逻辑层 (StrategyManager/RunManager)
-    ↓
-MCP 工具服务 (工具调用)
+运行管理器 (run_manager.py)
+    ├─ 检查MCP服务状态
+    ├─ 准备配置文件和环境变量
+    ├─ 启动 main.py 子进程
+    └─ 保存进程信息到 logs/
     ↓
 核心执行层 (main.py + BaseAgent)
+    ├─ 执行交易逻辑
+    ├─ 写入交易数据到 data/strategies/{id}/{mode}/
+    └─ 写入AI思考日志到 data/strategies/{id}/{mode}/agent_data/log/
     ↓
 数据存储层 (文件系统)
     ↓
 结果返回 (JSON)
     ↓
 前端展示
+```
+
+#### 运行状态监控数据流
+```
+前端状态轮询 (每2秒)
+    ↓
+HTTP API 请求 (GET /api/strategies/{id}/status/{mode})
+    ↓
+API 服务层 (strategy_api.py)
+    ↓
+运行管理器 (run_manager.py)
+    ├─ 读取进程信息文件 logs/{id}_{mode}_process.json
+    ├─ 使用 psutil 检查进程是否运行
+    ├─ 读取最新日志文件获取最新日志内容
+    └─ 检查结果数据文件是否存在
+    ↓
+返回状态信息 (JSON)
+    ├─ is_running: 是否正在运行
+    ├─ status: 状态 (running/completed/failed)
+    ├─ latest_log: 最新日志内容
+    └─ message: 状态消息
+    ↓
+前端更新显示
+    ├─ 更新进度条
+    ├─ 显示实时日志
+    └─ 更新状态图标和文本
 ```
 
 ### 核心组件
@@ -380,6 +420,163 @@ AI-Trader/
 4. **模式区分**: 明确区分回测、模拟盘、实盘三种运行模式
 5. **工具驱动**: 基于 MCP 协议，AI 通过工具调用完成所有操作
 6. **数据持久化**: 所有配置和交易数据都保存到文件系统
+7. **实时监控**: 前端通过轮询机制实时监控策略运行状态
+8. **日志追踪**: 完整的AI思考过程记录，便于调试和分析
+
+### 新增功能详解
+
+#### 1. 运行状态监控系统
+
+**功能概述**: 实时监控策略运行状态，提供进度显示和日志输出
+
+**后端实现**:
+- **进程跟踪**: 使用 `psutil` 库检查进程是否运行
+- **状态文件**: 在 `logs/{strategy_id}_{mode}_process.json` 保存进程信息
+- **日志读取**: 从 `data/strategies/{id}/{mode}/agent_data/log/{date}/log.jsonl` 读取最新日志
+- **状态判断**: 根据进程状态和结果文件判断策略运行状态
+
+**前端实现**:
+- **状态容器**: 显示运行状态、进度条、实时日志
+- **轮询机制**: 每2秒调用状态API检查运行状态
+- **进度显示**: 运行中显示60%进度条（带动画），完成显示100%
+- **日志显示**: 实时显示最新日志内容，自动滚动到底部
+- **状态图标**: 运行中⏳、已完成✅、失败❌、未启动⏸️
+
+**状态流转**:
+```
+未启动 → 运行中 → 已完成/失败
+  ↓         ↓           ↓
+ 隐藏    显示进度    显示结果
+        显示日志    自动刷新数据
+```
+
+#### 2. AI思考日志系统
+
+**功能概述**: 记录和展示AI决策过程的详细日志
+
+**日志存储结构**:
+```
+data/strategies/{strategy_id}/{mode}/agent_data/log/
+└── {date}/                    # 按日期分类
+    └── log.jsonl             # JSON Lines 格式日志
+        ├── timestamp         # 时间戳
+        ├── signature         # 模型签名
+        └── new_messages      # AI消息内容
+```
+
+**日志内容**:
+- AI的思考过程
+- 工具调用记录
+- 市场分析结果
+- 交易决策理由
+
+**API端点**:
+- `GET /api/strategies/{id}/logs/dates/{mode}` - 获取可用日志日期列表
+- `GET /api/strategies/{id}/logs/{mode}/{date}` - 获取指定日期的完整日志
+
+**前端展示**:
+- 日期选择器：选择要查看的日志日期
+- 日志内容区：格式化显示AI思考过程
+- 自动滚动：新日志自动滚动到可见区域
+
+#### 3. 策略运行按钮管理
+
+**功能位置**: 策略详情页 → 资产演变标签 → 模式选择器下方
+
+**显示逻辑**:
+- 回测模式：显示"🚀 开启回测"按钮
+- 模拟盘模式：显示"🎯 开启模拟"按钮
+- 实盘模式：显示"⚡ 开始实盘"按钮
+- 其他模式：隐藏对应按钮
+
+**按钮行为**:
+1. 点击按钮 → 确认对话框
+2. 确认后 → 调用运行API
+3. 启动成功 → 显示状态容器
+4. 开始状态监控 → 自动刷新数据
+
+#### 4. 进程管理机制
+
+**进程信息保存**:
+```json
+{
+  "strategy_id": "strategy_20251104_120000",
+  "mode": "backtest",
+  "process_id": 12345,
+  "config_file": "configs/runtime_strategy_20251104_120000_backtest.json",
+  "start_time": 1699123456.789,
+  "status": "running"
+}
+```
+
+**进程检查流程**:
+1. 读取进程信息文件
+2. 使用 `psutil.Process(pid)` 检查进程
+3. 验证进程命令行包含 `main.py`
+4. 检查进程是否真正运行
+5. 返回状态信息
+
+**状态判断**:
+- `is_running = true`: 进程存在且运行中
+- `status = "completed"`: 进程结束且有结果文件
+- `status = "failed"`: 进程结束但无结果文件
+- `status = "not_started"`: 无进程信息文件
+
+#### 5. 前端实时更新机制
+
+**轮询策略**:
+- **频率**: 每2秒检查一次状态
+- **触发时机**: 
+  - 策略启动后立即开始
+  - 页面加载时检查是否有正在运行的策略
+- **停止条件**: 
+  - 策略运行完成
+  - 策略运行失败
+  - 用户离开页面
+
+**更新内容**:
+- 运行状态图标和文本
+- 进度条进度（30% → 60% → 100%）
+- 最新日志内容
+- 状态消息
+
+**性能优化**:
+- 日志去重：避免重复显示相同日志
+- 条件更新：仅在有新日志时更新显示
+- 自动清理：完成3秒后自动隐藏状态容器
+
+#### 6. 错误处理和容错机制
+
+**后端错误处理**:
+- 进程不存在：返回 `status: "failed"`
+- 日志文件不存在：返回 `latest_log: null`
+- 权限错误：捕获异常并返回错误信息
+- 文件读取错误：返回空状态信息
+
+**前端错误处理**:
+- API请求失败：在控制台记录错误，不影响其他功能
+- 状态检查失败：显示"检查状态时出错"消息
+- 日志加载失败：显示"加载失败"提示
+- 数据为空：显示"暂无数据"提示
+
+#### 7. 数据持久化机制
+
+**进程信息持久化**:
+- 文件位置：`logs/{strategy_id}_{mode}_process.json`
+- 保存时机：策略启动时立即保存
+- 更新时机：状态检查时更新状态字段
+- 清理时机：策略完成后保留（用于历史记录）
+
+**日志持久化**:
+- 格式：JSON Lines (`.jsonl`)
+- 位置：`data/strategies/{id}/{mode}/agent_data/log/{date}/log.jsonl`
+- 追加模式：每次AI交互追加新日志
+- 按日期分类：每天一个日志文件
+
+**结果数据持久化**:
+- 资产演变：`data/strategies/{id}/{mode}/agent_data/asset_evolution.json`
+- 投资组合：`data/strategies/{id}/{mode}/agent_data/portfolio.json`
+- 交易记录：`data/strategies/{id}/{mode}/agent_data/trades.json`
 
 ---
 
@@ -696,6 +893,20 @@ GET http://localhost:8005/api/strategies/{id}/logs/dates/{mode}
 
 # 获取指定日期的日志内容
 GET http://localhost:8005/api/strategies/{id}/logs/{mode}/{date}
+
+# 获取策略运行状态（新增）
+GET http://localhost:8005/api/strategies/{id}/status/{mode}
+Response: {
+  "success": true,
+  "status": {
+    "is_running": true,
+    "status": "running",
+    "process_id": 12345,
+    "start_time": 1699123456.789,
+    "latest_log": "AI正在分析市场趋势...",
+    "message": "策略正在运行中..."
+  }
+}
 
 # 重启服务
 POST http://localhost:8005/api/restart-service
@@ -1046,4 +1257,50 @@ curl http://localhost:8005/api/strategies
 1. 修复配置保存后刷新页面丢失的问题
 2. 修复日志日期选择器一直显示"加载中..."的问题
 3. 修复交易日期范围在模拟盘和实盘模式下不应该显示的问题
+
+### v2.1 (2025-11-04)
+
+#### 新增功能
+1. **运行状态监控系统**
+   - 实时监控策略运行状态（运行中/已完成/失败）
+   - 进度条显示（30% → 60% → 100%）
+   - 实时日志输出，显示AI的最新思考过程
+   - 使用 `psutil` 检查进程运行状态
+   - 进程信息持久化到 `logs/{strategy_id}_{mode}_process.json`
+   - 前端每2秒自动轮询状态更新
+
+2. **进程管理机制**
+   - 保存进程ID、启动时间、配置文件路径
+   - 验证进程是否真正运行（检查命令行）
+   - 根据进程状态和结果文件判断策略状态
+   - 支持检查多个策略的并发运行状态
+
+3. **实时日志显示**
+   - 从日志文件读取最新日志内容
+   - 自动去重，避免重复显示
+   - 时间戳格式化显示
+   - 自动滚动到最新日志
+
+4. **状态API端点**
+   - `GET /api/strategies/{id}/status/{mode}` - 获取策略运行状态
+   - 返回进程ID、运行状态、最新日志、状态消息
+
+#### 改进功能
+1. **前端状态显示优化**
+   - 运行按钮位置调整到资产演变标签页
+   - 按钮显示逻辑基于当前选择的模式
+   - 策略启动后自动切换到资产演变标签
+   - 页面加载时自动检查是否有正在运行的策略
+
+2. **错误处理增强**
+   - 修复 `psutil` 未导入的问题
+   - 改进进程检查的错误处理
+   - 日志读取失败时的容错处理
+   - 前端API请求失败时的错误提示
+
+#### 技术实现
+- **后端**: `platform/run_manager.py` 添加 `check_run_status()` 和 `_get_latest_log_entry()` 方法
+- **API**: `platform/strategy_api.py` 添加 `/api/strategies/{id}/status/{mode}` 端点
+- **前端**: `docs/assets/js/strategy-detail.js` 添加状态监控和日志显示功能
+- **UI**: `docs/strategy-detail.html` 添加运行状态容器和进度条
 

@@ -118,8 +118,9 @@ class BaseAgent:
         self.model: Optional[ChatOpenAI] = None
         self.agent: Optional[Any] = None
         
-        # Data paths
-        self.data_path = os.path.join(self.base_log_path, self.signature)
+        # Data paths - Use the path directly as it's already properly structured
+        # The log_path parameter should already include the full path from run_manager
+        self.data_path = self.base_log_path  # Use base_log_path directly
         self.position_file = os.path.join(self.data_path, "position", "position.jsonl")
         
     def _get_default_mcp_config(self) -> Dict[str, Dict[str, Any]]:
@@ -194,7 +195,8 @@ class BaseAgent:
     
     def _setup_logging(self, today_date: str) -> str:
         """Set up log file path"""
-        log_path = os.path.join(self.base_log_path, self.signature, 'log', today_date)
+        # Use data_path directly as it already contains the full path
+        log_path = os.path.join(self.data_path, 'log', today_date)
         if not os.path.exists(log_path):
             os.makedirs(log_path)
         return os.path.join(log_path, "log.jsonl")

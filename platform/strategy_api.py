@@ -327,6 +327,18 @@ def get_log_dates(strategy_id, mode):
         print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/strategies/<strategy_id>/status/<mode>', methods=['GET'])
+def get_strategy_status(strategy_id, mode):
+    """Get strategy execution status"""
+    try:
+        if mode not in ["backtest", "simulate", "real"]:
+            return jsonify({"success": False, "error": "Invalid mode"}), 400
+        
+        status = run_manager.check_run_status(strategy_id, mode)
+        return jsonify({"success": True, "status": status})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/strategies/<strategy_id>/logs/<mode>/<date>', methods=['GET'])
 def get_log_content(strategy_id, mode, date):
     """Get log content for a specific date"""
@@ -374,6 +386,33 @@ def get_log_content(strategy_id, mode, date):
         import traceback
         print(f"Error getting log content: {e}")
         print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/data/available-range', methods=['GET'])
+def get_available_data_range():
+    """Get available date range from local data"""
+    try:
+        from tools.data_validator import get_data_date_range
+        from pathlib import Path
+        
+        data_file = Path("data/merged.jsonl")
+        min_date, max_date = get_data_date_range(data_file)
+        
+        if min_date and max_date:
+            return jsonify({
+                "success": True,
+                "available": True,
+                "start_date": min_date,
+                "end_date": max_date,
+                "message": f"数据范围: {min_date} 到 {max_date}"
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "available": False,
+                "message": "本地没有可用的价格数据"
+            })
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/restart-service', methods=['POST'])
