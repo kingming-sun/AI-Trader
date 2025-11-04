@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Trader - AI Trading Agent Benchmark</title>
+    <title>AI-Trader - AI交易代理基准测试</title>
     <link rel="stylesheet" href="assets/css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -15,45 +15,50 @@
                 <h1>AI-Trader</h1>
             </div>
             <ul class="nav-menu">
-                <li><a href="index.html" class="nav-link active">Asset Evolution</a></li>
-                <li><a href="portfolio.html" class="nav-link">Portfolio Analysis</a></li>
-                <li><a href="config.html" class="nav-link">Configuration</a></li>
+                <li><a href="index.html" class="nav-link active">资产演变</a></li>
+                <li><a href="portfolio.html" class="nav-link">投资组合分析</a></li>
+                <li><a href="config.html" class="nav-link">配置管理</a></li>
+                <li><a href="strategies.html" class="nav-link">策略管理</a></li>
             </ul>
         </div>
     </nav>
 
     <main class="container">
         <header class="page-header">
-            <h2>AI Agent Performance Comparison</h2>
-            <p class="subtitle">Track how different AI models perform in Nasdaq-100 stock trading</p>
+            <h2>AI代理性能对比</h2>
+            <p class="subtitle">跟踪不同AI模型在纳斯达克100股票交易中的表现</p>
         </header>
 
         <section class="stats-grid">
             <div class="stat-card">
-                <div class="stat-label">Active Agents</div>
+                <div class="stat-label">活跃代理</div>
                 <div class="stat-value" id="agent-count">-</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Trading Period</div>
+                <div class="stat-label">交易周期</div>
                 <div class="stat-value" id="trading-period">-</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Best Performer</div>
+                <div class="stat-label">最佳表现者</div>
                 <div class="stat-value" id="best-performer">-</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Best Return</div>
+                <div class="stat-label">最佳回报率</div>
                 <div class="stat-value" id="avg-return">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">交易模式</div>
+                <div class="stat-value" id="trading-mode" style="font-weight: 600;">-</div>
             </div>
         </section>
 
         <section class="chart-section">
             <div class="chart-card hero">
                 <div class="chart-header">
-                    <h3>Total Asset Value Over Time</h3>
+                    <h3>总资产价值变化</h3>
                     <div class="chart-controls">
-                        <button class="btn-secondary" id="toggle-log">Linear Scale</button>
-                        <button class="btn-secondary" id="export-chart">Export Data</button>
+                        <button class="btn-secondary" id="toggle-log">线性坐标</button>
+                        <button class="btn-secondary" id="export-chart">导出数据</button>
                     </div>
                 </div>
                 <div class="chart-container">
@@ -63,13 +68,14 @@
         </section>
 
         <section class="legend-section">
-            <h3>Agent Legend</h3>
+            <h3>代理图例</h3>
             <div class="agent-legend" id="agentLegend"></div>
         </section>
 
         <div class="loading-overlay" id="loadingOverlay">
             <div class="spinner"></div>
-            <p>Loading trading data...</p>
+            <p>正在加载交易数据...</p>
+            <p id="loadingProgress" style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">请稍候...</p>
         </div>
 
         <button class="scroll-to-top" id="scrollToTop" aria-label="Scroll to top">
@@ -78,7 +84,7 @@
     </main>
 
     <footer class="footer">
-        <p>AI-Trader &copy; 2025 | AI-Powered Trading Agent Benchmark</p>
+        <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
     </footer>
 
     <script src="assets/js/data-loader.js"></script>

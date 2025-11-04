@@ -46,7 +46,7 @@ Stay tuned for these exciting improvements! 🎉
 
 ---
 
-[🚀 Quick Start](#-quick-start) • [📈 Performance Analysis](#-performance-analysis) • [🛠️ Configuration Guide](#-configuration-guide) • [中文文档](README_CN.md)
+[🚀 Quick Start](#-quick-start) • [📈 Performance Analysis](#-performance-analysis) • [🛠️ Configuration Guide](#-configuration-guide) • [📚 User Guide](docs/USER_GUIDE.md) • [中文文档](README_CN.md)
 
 </div>
 

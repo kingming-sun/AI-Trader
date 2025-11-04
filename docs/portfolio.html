@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Analysis - AI-Trader</title>
+    <title>投资组合分析 - AI-Trader</title>
     <link rel="stylesheet" href="assets/css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -15,49 +15,50 @@
                 <h1>AI-Trader</h1>
             </div>
             <ul class="nav-menu">
-                <li><a href="index.html" class="nav-link">Asset Evolution</a></li>
-                <li><a href="portfolio.html" class="nav-link active">Portfolio Analysis</a></li>
-                <li><a href="config.html" class="nav-link">Configuration</a></li>
+                <li><a href="index.html" class="nav-link">资产演变</a></li>
+                <li><a href="portfolio.html" class="nav-link active">投资组合分析</a></li>
+                <li><a href="config.html" class="nav-link">配置管理</a></li>
+                <li><a href="strategies.html" class="nav-link">策略管理</a></li>
             </ul>
         </div>
     </nav>
 
     <main class="container">
         <header class="page-header">
-            <h2>Agent Portfolio Breakdown</h2>
-            <p class="subtitle">Detailed analysis of each AI agent's holdings and performance</p>
+            <h2>代理投资组合明细</h2>
+            <p class="subtitle">每个AI代理的持仓和表现详细分析</p>
         </header>
 
         <section class="agent-selector-section">
-            <label for="agentSelect">Select Agent:</label>
+            <label for="agentSelect">选择代理：</label>
             <select id="agentSelect" class="agent-select"></select>
         </section>
 
         <section class="portfolio-grid">
             <div class="portfolio-card">
-                <h3>Performance Metrics</h3>
+                <h3>性能指标</h3>
                 <div class="metrics-list">
                     <div class="metric-item">
-                        <span class="metric-label">Total Asset Value</span>
+                        <span class="metric-label">总资产价值</span>
                         <span class="metric-value" id="totalAsset">$0.00</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-label">Total Return</span>
+                        <span class="metric-label">总回报率</span>
                         <span class="metric-value" id="totalReturn">0.00%</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-label">Cash Position</span>
+                        <span class="metric-label">现金头寸</span>
                         <span class="metric-value" id="cashPosition">$0.00</span>
                     </div>
                     <div class="metric-item">
-                        <span class="metric-label">Total Trades</span>
+                        <span class="metric-label">总交易次数</span>
                         <span class="metric-value" id="totalTrades">0</span>
                     </div>
                 </div>
             </div>
 
             <div class="portfolio-card">
-                <h3>Asset Allocation</h3>
+                <h3>资产配置</h3>
                 <div class="chart-container-small">
                     <canvas id="allocationChart"></canvas>
                 </div>
@@ -65,17 +66,17 @@
         </section>
 
         <section class="holdings-section">
-            <h3>Current Holdings</h3>
+            <h3>当前持仓</h3>
             <div class="holdings-scroll-wrapper">
                 <div class="holdings-table-container">
                     <table class="holdings-table">
                         <thead>
                             <tr>
-                                <th>Symbol</th>
-                                <th>Shares</th>
-                                <th>Current Price</th>
-                                <th>Market Value</th>
-                                <th>Weight</th>
+                                <th>股票代码</th>
+                                <th>持股数量</th>
+                                <th>当前价格</th>
+                                <th>市值</th>
+                                <th>权重</th>
                             </tr>
                         </thead>
                         <tbody id="holdingsTableBody">
@@ -87,7 +88,7 @@
         </section>
 
         <section class="trade-history-section">
-            <h3>Recent Trade Activity</h3>
+            <h3>最近交易活动</h3>
             <div class="trade-timeline" id="tradeTimeline">
                 <!-- Populated by JavaScript -->
             </div>
@@ -95,7 +96,7 @@
 
         <div class="loading-overlay" id="loadingOverlay">
             <div class="spinner"></div>
-            <p>Loading portfolio data...</p>
+            <p>正在加载投资组合数据...</p>
         </div>
 
         <button class="scroll-to-top" id="scrollToTop" aria-label="Scroll to top">
@@ -104,7 +105,7 @@
     </main>
 
     <footer class="footer">
-        <p>AI-Trader &copy; 2025 | AI-Powered Trading Agent Benchmark</p>
+        <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
     </footer>
 
     <script src="assets/js/data-loader.js"></script>

@@ -53,27 +53,83 @@ class DataLoader {
         }
     }
 
+    // Determine trading mode from positions
+    detectTradingMode(positions) {
+        let hasRealTrade = false;
+        let tradingMode = 'BACKTEST'; // Default to backtest
+        
+        for (const pos of positions) {
+            const action = pos.this_action;
+            if (action && action.real_trade === true) {
+                hasRealTrade = true;
+                // Check if there's a trd_env field or order_id to distinguish SIMULATE vs REAL
+                // For now, we'll use a heuristic: check if order_id format suggests real trading
+                // In the future, we should add a trd_env field to the data
+                if (action.order_id) {
+                    // If order_id exists, it's either SIMULATE or REAL
+                    // We'll need to check configuration or add metadata
+                    // For now, default to SIMULATE (safer assumption)
+                    tradingMode = 'SIMULATE';
+                }
+            }
+        }
+        
+        // If we have real trades but can't determine SIMULATE vs REAL,
+        // check if we can infer from date (today = likely REAL, past = likely SIMULATE)
+        if (hasRealTrade && tradingMode === 'BACKTEST') {
+            const today = new Date().toISOString().split('T')[0];
+            const lastDate = positions[positions.length - 1]?.date;
+            if (lastDate === today) {
+                tradingMode = 'REAL'; // Today's date with real_trade = likely real
+            } else {
+                tradingMode = 'SIMULATE'; // Past date with real_trade = likely simulate
+            }
+        }
+        
+        return tradingMode;
+    }
+
     // Load position data for a specific agent
     async loadAgentPositions(agentName) {
         try {
-            const response = await fetch(`${this.baseDataPath}/agent_data/${agentName}/position/position.jsonl`);
-            if (!response.ok) throw new Error(`Failed to load positions for ${agentName}`);
+            const url = `${this.baseDataPath}/agent_data/${agentName}/position/position.jsonl`;
+            console.log(`📥 Fetching position data: ${url}`);
+            
+            const response = await fetch(url, {
+                cache: 'no-cache' // Ensure fresh data
+            });
+            
+            if (!response.ok) {
+                const errorMsg = `Failed to load positions for ${agentName}: ${response.status} ${response.statusText}`;
+                console.error(`❌ ${errorMsg}`);
+                throw new Error(errorMsg);
+            }
 
             const text = await response.text();
+            if (!text || text.trim().length === 0) {
+                console.warn(`⚠️  Position file for ${agentName} is empty`);
+                return [];
+            }
+            
             const lines = text.trim().split('\n').filter(line => line.trim() !== '');
             const positions = lines.map(line => {
                 try {
                     return JSON.parse(line);
                 } catch (parseError) {
-                    console.error(`Error parsing line for ${agentName}:`, line, parseError);
+                    console.error(`❌ Error parsing line for ${agentName}:`, parseError, line.substring(0, 100));
                     return null;
                 }
             }).filter(pos => pos !== null);
 
-            console.log(`Loaded ${positions.length} positions for ${agentName}`);
+            console.log(`✅ Loaded ${positions.length} positions for ${agentName}`);
             return positions;
         } catch (error) {
-            console.error(`Error loading positions for ${agentName}:`, error);
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                console.error(`🌐 Network error loading positions for ${agentName}:`, error.message);
+                console.error(`   请检查：\n   1. 前端服务器是否在运行 (http://localhost:8000)\n   2. 数据文件路径是否正确\n   3. 浏览器控制台是否有 CORS 错误`);
+            } else {
+                console.error(`❌ Error loading positions for ${agentName}:`, error.message);
+            }
             return [];
         }
     }
@@ -85,25 +141,63 @@ class DataLoader {
         }
 
         try {
-            const response = await fetch(`${this.baseDataPath}/daily_prices_${symbol}.json`);
-            if (!response.ok) throw new Error(`Failed to load price for ${symbol}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
+            const url = `${this.baseDataPath}/daily_prices_${symbol}.json`;
+            console.log(`📥 Fetching price data: ${url}`);
+            
+            const response = await fetch(url, {
+                signal: controller.signal,
+                cache: 'no-cache' // Ensure fresh data
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                const errorMsg = `Failed to load price for ${symbol}: ${response.status} ${response.statusText}`;
+                console.error(`❌ ${errorMsg}`);
+                throw new Error(errorMsg);
+            }
 
             const data = await response.json();
+            if (!data || !data['Time Series (Daily)']) {
+                const errorMsg = `Invalid price data format for ${symbol}`;
+                console.error(`❌ ${errorMsg}`, data);
+                throw new Error(errorMsg);
+            }
+            
             this.priceCache[symbol] = data['Time Series (Daily)'];
+            console.log(`✅ Loaded price data for ${symbol} (${Object.keys(this.priceCache[symbol]).length} days)`);
             return this.priceCache[symbol];
         } catch (error) {
-            console.error(`Error loading price for ${symbol}:`, error);
-            return null;
+            if (error.name === 'AbortError') {
+                console.error(`⏱️  Timeout loading price for ${symbol} after 10 seconds`);
+            } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                console.error(`🌐 Network error loading price for ${symbol}:`, error.message);
+                console.error(`   请检查：\n   1. 前端服务器是否在运行 (http://localhost:8000)\n   2. 数据文件路径是否正确\n   3. 浏览器控制台是否有 CORS 错误`);
+            } else {
+                console.error(`❌ Error loading price for ${symbol}:`, error.message);
+            }
+            // Return empty object instead of null to prevent repeated fetch attempts
+            this.priceCache[symbol] = {};
+            return this.priceCache[symbol];
         }
     }
 
     // Get closing price for a symbol on a specific date
     async getClosingPrice(symbol, date) {
-        const prices = await this.loadStockPrice(symbol);
-        if (!prices || !prices[date]) {
+        try {
+            const prices = await this.loadStockPrice(symbol);
+            if (!prices || !prices[date]) {
+                console.warn(`No price data for ${symbol} on ${date}`);
+                return null;
+            }
+            return parseFloat(prices[date]['4. close']);
+        } catch (error) {
+            console.error(`Error getting closing price for ${symbol} on ${date}:`, error);
             return null;
         }
-        return parseFloat(prices[date]['4. close']);
     }
 
     // Calculate total asset value for a position on a given date
@@ -113,10 +207,18 @@ class DataLoader {
         // Get all stock symbols (exclude CASH)
         const symbols = Object.keys(position.positions).filter(s => s !== 'CASH');
 
+        // Batch load prices for all symbols at once
+        const pricePromises = symbols
+            .filter(s => position.positions[s] > 0)
+            .map(symbol => this.getClosingPrice(symbol, date));
+
+        const prices = await Promise.all(pricePromises);
+        
+        let priceIndex = 0;
         for (const symbol of symbols) {
             const shares = position.positions[symbol];
             if (shares > 0) {
-                const price = await this.getClosingPrice(symbol, date);
+                const price = prices[priceIndex++];
                 if (price) {
                     totalValue += shares * price;
                 }
@@ -129,65 +231,96 @@ class DataLoader {
     // Load complete data for an agent including asset values over time
     async loadAgentData(agentName) {
         console.log(`Starting to load data for ${agentName}...`);
-        const positions = await this.loadAgentPositions(agentName);
-        if (positions.length === 0) {
-            console.log(`No positions found for ${agentName}`);
+        try {
+            const positions = await this.loadAgentPositions(agentName);
+            if (positions.length === 0) {
+                console.log(`No positions found for ${agentName}`);
+                return null;
+            }
+
+            console.log(`Processing ${positions.length} positions for ${agentName}...`);
+            
+            // Group positions by date and take only the last position for each date
+            const positionsByDate = {};
+            positions.forEach(position => {
+                const date = position.date;
+                if (!positionsByDate[date] || position.id > positionsByDate[date].id) {
+                    positionsByDate[date] = position;
+                }
+            });
+            
+            // Convert to array and sort by date
+            const uniquePositions = Object.values(positionsByDate).sort((a, b) => {
+                if (a.date !== b.date) {
+                    return a.date.localeCompare(b.date);
+                }
+                return a.id - b.id;
+            });
+            
+            console.log(`Reduced from ${positions.length} to ${uniquePositions.length} unique daily positions for ${agentName}`);
+            
+            const assetHistory = [];
+            const totalPositions = uniquePositions.length;
+
+            for (let i = 0; i < uniquePositions.length; i++) {
+                const position = uniquePositions[i];
+                const date = position.date;
+                
+                // Update loading progress
+                if (i % 5 === 0 || i === totalPositions - 1) {
+                    console.log(`Processing ${agentName}: ${i + 1}/${totalPositions} (${Math.round((i + 1) / totalPositions * 100)}%)`);
+                }
+                
+                try {
+                    const assetValue = await this.calculateAssetValue(position, date);
+                    assetHistory.push({
+                        date: date,
+                        value: assetValue,
+                        id: position.id,
+                        action: position.this_action || null
+                    });
+                } catch (error) {
+                    console.error(`Error calculating asset value for ${agentName} on ${date}:`, error);
+                    // Continue with next position even if this one fails
+                    if (assetHistory.length > 0) {
+                        // Use previous value as fallback
+                        assetHistory.push({
+                            date: date,
+                            value: assetHistory[assetHistory.length - 1].value,
+                            id: position.id,
+                            action: position.this_action || null
+                        });
+                    }
+                }
+            }
+
+            // Detect trading mode
+            const tradingMode = this.detectTradingMode(positions);
+            
+            const result = {
+                name: agentName,
+                positions: positions,
+                assetHistory: assetHistory,
+                initialValue: assetHistory[0]?.value || 10000,
+                currentValue: assetHistory[assetHistory.length - 1]?.value || 0,
+                return: assetHistory.length > 0 ?
+                    ((assetHistory[assetHistory.length - 1].value - assetHistory[0].value) / assetHistory[0].value * 100) : 0,
+                tradingMode: tradingMode  // BACKTEST, SIMULATE, or REAL
+            };
+
+            console.log(`Successfully loaded data for ${agentName}:`, {
+                positions: positions.length,
+                assetHistory: assetHistory.length,
+                initialValue: result.initialValue,
+                currentValue: result.currentValue,
+                return: result.return
+            });
+
+            return result;
+        } catch (error) {
+            console.error(`Error loading data for ${agentName}:`, error);
             return null;
         }
-
-        console.log(`Processing ${positions.length} positions for ${agentName}...`);
-        
-        // Group positions by date and take only the last position for each date
-        const positionsByDate = {};
-        positions.forEach(position => {
-            const date = position.date;
-            if (!positionsByDate[date] || position.id > positionsByDate[date].id) {
-                positionsByDate[date] = position;
-            }
-        });
-        
-        // Convert to array and sort by date
-        const uniquePositions = Object.values(positionsByDate).sort((a, b) => {
-            if (a.date !== b.date) {
-                return a.date.localeCompare(b.date);
-            }
-            return a.id - b.id;
-        });
-        
-        console.log(`Reduced from ${positions.length} to ${uniquePositions.length} unique daily positions for ${agentName}`);
-        
-        const assetHistory = [];
-
-        for (const position of uniquePositions) {
-            const date = position.date;
-            const assetValue = await this.calculateAssetValue(position, date);
-            assetHistory.push({
-                date: date,
-                value: assetValue,
-                id: position.id,
-                action: position.this_action || null
-            });
-        }
-
-        const result = {
-            name: agentName,
-            positions: positions,
-            assetHistory: assetHistory,
-            initialValue: assetHistory[0]?.value || 10000,
-            currentValue: assetHistory[assetHistory.length - 1]?.value || 0,
-            return: assetHistory.length > 0 ?
-                ((assetHistory[assetHistory.length - 1].value - assetHistory[0].value) / assetHistory[0].value * 100) : 0
-        };
-
-        console.log(`Successfully loaded data for ${agentName}:`, {
-            positions: positions.length,
-            assetHistory: assetHistory.length,
-            initialValue: result.initialValue,
-            currentValue: result.currentValue,
-            return: result.return
-        });
-
-        return result;
     }
 
     // Load QQQ invesco data
@@ -285,33 +418,66 @@ class DataLoader {
 
     // Load all agents data
     async loadAllAgentsData() {
-        console.log('Starting to load all agents data...');
-        const agents = await this.loadAgentList();
-        console.log('Found agents:', agents);
-        const allData = {};
-
-        for (const agent of agents) {
-            console.log(`Loading data for ${agent}...`);
-            const data = await this.loadAgentData(agent);
-            if (data) {
-                allData[agent] = data;
-                console.log(`Successfully added ${agent} to allData`);
-            } else {
-                console.log(`Failed to load data for ${agent}`);
+        console.log('🚀 Starting to load all agents data...');
+        console.log(`📂 Base data path: ${this.baseDataPath}`);
+        
+        try {
+            const agents = await this.loadAgentList();
+            console.log(`📊 Found ${agents.length} agent(s):`, agents);
+            
+            if (agents.length === 0) {
+                console.warn('⚠️  No agents found! Please check:');
+                console.warn('   1. Data files exist in docs/data/agent_data/');
+                console.warn('   2. Agent names match the expected patterns');
+                console.warn('   3. Position files are named correctly (position/position.jsonl)');
             }
-        }
+            
+            const allData = {};
 
-        console.log('Final allData:', Object.keys(allData));
-        this.agentData = allData;
-        
-        // Load QQQ invesco data
-        const qqqData = await this.loadQQQData();
-        if (qqqData) {
-            allData['QQQ'] = qqqData;
-            console.log('Successfully added QQQ invesco to allData');
+            for (let i = 0; i < agents.length; i++) {
+                const agent = agents[i];
+                console.log(`\n📦 [${i + 1}/${agents.length}] Loading data for ${agent}...`);
+                try {
+                    const data = await this.loadAgentData(agent);
+                    if (data) {
+                        allData[agent] = data;
+                        console.log(`✅ Successfully loaded ${agent}: ${data.positions.length} positions, ${data.assetHistory.length} asset history points`);
+                    } else {
+                        console.warn(`⚠️  Failed to load data for ${agent}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error loading data for ${agent}:`, error);
+                    console.error('   Stack:', error.stack);
+                }
+            }
+
+            console.log(`\n📊 Final allData keys:`, Object.keys(allData));
+            this.agentData = allData;
+            
+            // Load QQQ invesco data
+            console.log('\n📈 Loading QQQ benchmark data...');
+            try {
+                const qqqData = await this.loadQQQData();
+                if (qqqData) {
+                    allData['QQQ'] = qqqData;
+                    console.log(`✅ Successfully added QQQ benchmark: ${qqqData.assetHistory.length} data points`);
+                } else {
+                    console.warn('⚠️  Failed to load QQQ benchmark data');
+                }
+            } catch (error) {
+                console.error('❌ Error loading QQQ data:', error);
+            }
+            
+            if (Object.keys(allData).length === 0) {
+                throw new Error('No data loaded! Please check the console for details.');
+            }
+            
+            return allData;
+        } catch (error) {
+            console.error('❌ Fatal error in loadAllAgentsData:', error);
+            console.error('   Stack:', error.stack);
+            throw error;
         }
-        
-        return allData;
     }
 
     // Get current holdings for an agent (latest position)
@@ -365,6 +531,26 @@ class DataLoader {
             'QQQ': 'QQQ invesco'
         };
         return names[agentName] || agentName;
+    }
+    
+    // Get trading mode display text
+    getTradingModeText(mode) {
+        const modeTexts = {
+            'BACKTEST': '回测',
+            'SIMULATE': '模拟盘',
+            'REAL': '实盘'
+        };
+        return modeTexts[mode] || mode;
+    }
+    
+    // Get trading mode badge color
+    getTradingModeColor(mode) {
+        const colors = {
+            'BACKTEST': '#00d4ff',  // Cyan blue
+            'SIMULATE': '#ffbe0b',  // Yellow
+            'REAL': '#f56565'       // Red
+        };
+        return colors[mode] || '#718096';
     }
 
     // Get icon for agent (SVG file path)

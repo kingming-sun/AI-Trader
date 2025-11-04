@@ -39,27 +39,52 @@ function loadIconImage(iconPath) {
     });
 }
 
+// Update loading progress message
+function updateLoadingProgress(message) {
+    const progressEl = document.getElementById('loadingProgress');
+    if (progressEl) {
+        progressEl.textContent = message;
+    }
+    console.log(`📌 ${message}`);
+}
+
 // Initialize the page
 async function init() {
     showLoading();
+    updateLoadingProgress('正在初始化...');
+    
+    // Add timeout to prevent infinite loading
+    const loadingTimeout = setTimeout(() => {
+        console.error('⏱️  Loading timeout - taking too long (2 minutes)');
+        hideLoading();
+        alert('数据加载超时（2分钟）！\n\n请检查:\n1. 浏览器控制台的错误信息\n2. 数据文件是否存在\n3. 网络连接是否正常\n4. 前端服务器是否在运行\n\n如果问题持续，请刷新页面重试。');
+    }, 120000); // 2 minutes timeout
 
     try {
         // Load all agents data
-        console.log('Loading all agents data...');
+        updateLoadingProgress('正在加载交易数据...');
+        console.log('🚀 Starting data loading process...');
         allAgentsData = await dataLoader.loadAllAgentsData();
-        console.log('Data loaded:', allAgentsData);
+        console.log('✅ Data loaded successfully:', Object.keys(allAgentsData));
+        
+        if (!allAgentsData || Object.keys(allAgentsData).length === 0) {
+            throw new Error('没有加载到任何数据！请检查数据文件是否存在。');
+        }
 
         // Preload all agent icons
         const agentNames = Object.keys(allAgentsData);
+        updateLoadingProgress(`正在加载图标 (${agentNames.length} 个代理)...`);
+        console.log(`🖼️  Preloading icons for ${agentNames.length} agents...`);
         const iconPromises = agentNames.map(agentName => {
             const iconPath = dataLoader.getAgentIcon(agentName);
             return loadIconImage(iconPath).catch(err => {
-                console.warn(`Failed to load icon for ${agentName}:`, err);
+                console.warn(`⚠️  Failed to load icon for ${agentName}:`, err);
             });
         });
         await Promise.all(iconPromises);
-        console.log('Icons preloaded');
+        console.log('✅ Icons preloaded');
 
+        updateLoadingProgress('正在生成图表...');
         // Update stats
         updateStats();
 
@@ -72,9 +97,30 @@ async function init() {
         // Set up event listeners
         setupEventListeners();
 
+        clearTimeout(loadingTimeout);
+        console.log('🎉 Page initialization complete!');
     } catch (error) {
-        console.error('Error initializing page:', error);
-        alert('Failed to load trading data. Please check console for details.');
+        clearTimeout(loadingTimeout);
+        console.error('❌ Error initializing page:', error);
+        console.error('   Error name:', error.name);
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
+        
+        let errorMessage = `加载交易数据失败: ${error.message}\n\n`;
+        errorMessage += `请检查:\n`;
+        errorMessage += `1. 数据文件是否存在 (docs/data/agent_data/)\n`;
+        errorMessage += `2. 浏览器控制台的详细错误信息\n`;
+        errorMessage += `3. 网络连接是否正常\n`;
+        errorMessage += `4. 前端服务器是否在运行 (http://localhost:8000)\n`;
+        
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            errorMessage += `\n⚠️  检测到网络错误，可能是:\n`;
+            errorMessage += `   - CORS 问题（检查服务器配置）\n`;
+            errorMessage += `   - 服务器未运行（运行: cd docs && python3 -m http.server 8000）\n`;
+            errorMessage += `   - 数据文件路径不正确\n`;
+        }
+        
+        alert(errorMessage);
     } finally {
         hideLoading();
     }
@@ -112,6 +158,22 @@ function updateStats() {
         }
     });
 
+    // Detect trading modes
+    const tradingModes = new Set();
+    agentNames.forEach(name => {
+        const mode = allAgentsData[name].tradingMode || 'BACKTEST';
+        tradingModes.add(mode);
+    });
+    
+    // Display trading mode(s)
+    let modeDisplay = 'Mixed';
+    if (tradingModes.size === 1) {
+        const mode = Array.from(tradingModes)[0];
+        modeDisplay = dataLoader.getTradingModeText(mode);
+    } else if (tradingModes.size > 1) {
+        modeDisplay = Array.from(tradingModes).map(m => dataLoader.getTradingModeText(m)).join(' / ');
+    }
+    
     // Update DOM
     document.getElementById('agent-count').textContent = agentCount;
     document.getElementById('trading-period').textContent = minDate && maxDate ?
@@ -120,6 +182,16 @@ function updateStats() {
         dataLoader.getAgentDisplayName(bestAgent) : 'N/A';
     document.getElementById('avg-return').textContent = bestAgent ?
         dataLoader.formatPercent(bestReturn) : 'N/A';
+    
+    // Update trading mode display
+    const tradingModeEl = document.getElementById('trading-mode');
+    tradingModeEl.textContent = modeDisplay;
+    if (tradingModes.size === 1) {
+        const mode = Array.from(tradingModes)[0];
+        tradingModeEl.style.color = dataLoader.getTradingModeColor(mode);
+    } else {
+        tradingModeEl.style.color = 'var(--text-secondary)';
+    }
 }
 
 // Create the main chart
@@ -137,13 +209,23 @@ function createChart() {
         const data = allAgentsData[agentName];
         let color, borderWidth, borderDash;
         
+        // Override color based on trading mode
+        const tradingMode = data.tradingMode || 'BACKTEST';
+        
         // Special styling for QQQ benchmark
         if (agentName === 'QQQ') {
             color = dataLoader.getAgentBrandColor(agentName) || '#ff6b00';
             borderWidth = 2;
             borderDash = [5, 5]; // Dashed line for benchmark
         } else {
-            color = agentColors[index % agentColors.length];
+            // Use trading mode color if available
+            if (tradingMode === 'SIMULATE') {
+                color = '#ffbe0b'; // Yellow for simulate
+            } else if (tradingMode === 'REAL') {
+                color = '#f56565'; // Red for real
+            } else {
+                color = agentColors[index % agentColors.length];
+            }
             borderWidth = 3;
             borderDash = [];
         }
@@ -331,12 +413,21 @@ function createLegend() {
         const data = allAgentsData[agentName];
         let color, borderStyle;
         
+        const tradingMode = data.tradingMode || 'BACKTEST';
+        
         // Special styling for QQQ benchmark
         if (agentName === 'QQQ') {
             color = dataLoader.getAgentBrandColor(agentName) || '#ff6b00';
             borderStyle = 'dashed';
         } else {
-            color = agentColors[index % agentColors.length];
+            // Use trading mode color if available
+            if (tradingMode === 'SIMULATE') {
+                color = '#ffbe0b'; // Yellow for simulate
+            } else if (tradingMode === 'REAL') {
+                color = '#f56565'; // Red for real
+            } else {
+                color = agentColors[index % agentColors.length];
+            }
             borderStyle = 'solid';
         }
         
@@ -353,7 +444,12 @@ function createLegend() {
             </div>
             <div class="legend-color" style="background: ${color}; border-style: ${borderStyle};"></div>
             <div class="legend-info">
-                <div class="legend-name">${dataLoader.getAgentDisplayName(agentName)}</div>
+                <div class="legend-name">
+                    ${dataLoader.getAgentDisplayName(agentName)}
+                    <span class="legend-mode" style="color: ${dataLoader.getTradingModeColor(tradingMode)}; font-size: 0.75rem; margin-left: 0.5rem; font-weight: 500;">
+                        [${dataLoader.getTradingModeText(tradingMode)}]
+                    </span>
+                </div>
                 <div class="legend-return ${returnClass}">${dataLoader.formatPercent(returnValue)}</div>
             </div>
         `;
@@ -367,7 +463,7 @@ function toggleScale() {
     isLogScale = !isLogScale;
 
     const button = document.getElementById('toggle-log');
-    button.textContent = isLogScale ? 'Log Scale' : 'Linear Scale';
+    button.textContent = isLogScale ? '对数坐标' : '线性坐标';
 
     // Update chart
     if (chartInstance) {

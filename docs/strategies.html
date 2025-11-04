@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>策略管理 - AI-Trader</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <style>
+        .strategy-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .strategy-workflow {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .workflow-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.5rem;
+            position: relative;
+        }
+        
+        .workflow-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            padding: 1rem;
+            border-radius: 8px;
+            transition: all var(--transition-normal);
+        }
+        
+        .workflow-step.active {
+            background: rgba(0, 212, 255, 0.1);
+            border: 2px solid var(--accent-blue);
+        }
+        
+        .workflow-step.completed {
+            background: rgba(72, 187, 120, 0.1);
+            border: 2px solid var(--success);
+        }
+        
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--secondary-bg);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.5rem;
+            font-weight: 600;
+        }
+        
+        .workflow-step.active .step-number {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+        
+        .workflow-step.completed .step-number {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+        
+        .strategy-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .strategy-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            transition: all var(--transition-normal);
+            cursor: pointer;
+        }
+        
+        .strategy-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-glow);
+            border-color: var(--accent-blue);
+        }
+        
+        .strategy-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+        
+        .strategy-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-design {
+            background: rgba(113, 128, 150, 0.2);
+            color: var(--text-muted);
+        }
+        
+        .status-backtest {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--accent-blue);
+        }
+        
+        .status-simulate {
+            background: rgba(255, 190, 11, 0.2);
+            color: #ffbe0b;
+        }
+        
+        .status-real {
+            background: rgba(245, 101, 101, 0.2);
+            color: var(--danger);
+        }
+        
+        .strategy-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        
+        .btn-run {
+            background: var(--accent-blue);
+            color: white;
+        }
+        
+        .btn-run:hover {
+            background: var(--accent-cyan);
+        }
+        
+        .btn-edit {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-edit:hover {
+            background: var(--card-bg);
+            border-color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">📊</span>
+                <h1>AI-Trader</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">资产演变</a></li>
+                <li><a href="portfolio.html" class="nav-link">投资组合分析</a></li>
+                <li><a href="config.html" class="nav-link">配置管理</a></li>
+                <li><a href="strategies.html" class="nav-link active">策略管理</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="strategy-container">
+            <header class="page-header">
+                <h2>策略管理</h2>
+                <p class="subtitle">创建、管理和运行交易策略，通过回测 → 模拟 → 实盘工作流程</p>
+            </header>
+
+            <!-- Workflow Visualization -->
+            <section class="strategy-workflow">
+                <h3>策略工作流</h3>
+                <div class="workflow-steps">
+                    <div class="workflow-step" id="step-design">
+                        <div class="step-number">1</div>
+                        <div class="step-title">策略设计</div>
+                        <div class="step-desc">配置参数和提示词</div>
+                    </div>
+                    <div class="workflow-step" id="step-backtest">
+                        <div class="step-number">2</div>
+                        <div class="step-title">回测</div>
+                        <div class="step-desc">使用历史数据验证</div>
+                    </div>
+                    <div class="workflow-step" id="step-simulate">
+                        <div class="step-number">3</div>
+                        <div class="step-title">模拟</div>
+                        <div class="step-desc">使用实时数据测试</div>
+                    </div>
+                    <div class="workflow-step" id="step-real">
+                        <div class="step-number">4</div>
+                        <div class="step-title">实盘交易</div>
+                        <div class="step-desc">使用真实资金部署</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Services Status -->
+            <section class="strategy-workflow" style="margin-bottom: 2rem;">
+                <h3>平台服务状态</h3>
+                <div id="servicesStatus" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                    <!-- Services status will be loaded here -->
+                </div>
+                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                    <button class="btn-primary" id="startMCPServicesBtn">启动 MCP 服务</button>
+                    <button class="btn-secondary" id="stopMCPServicesBtn">停止 MCP 服务</button>
+                    <button class="btn-secondary" id="refreshServicesBtn">刷新状态</button>
+                </div>
+            </section>
+
+            <!-- Strategy List -->
+            <section>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h3>策略</h3>
+                    <button class="btn-primary" id="createStrategyBtn">+ 创建新策略</button>
+                </div>
+                
+                <div class="strategy-list" id="strategyList">
+                    <!-- Strategies will be loaded here -->
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
+    </footer>
+
+    <script src="assets/js/strategy-manager.js"></script>
+</body>
+</html>
+
