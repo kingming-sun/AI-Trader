@@ -165,7 +165,7 @@
             justify-content: flex-end;
         }
         
-        .btn-save {
+        .btn-save, .btn-primary {
             background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
             color: white;
             border: none;
@@ -177,9 +177,43 @@
             transition: all var(--transition-normal);
         }
         
-        .btn-save:hover {
+        .btn-save:hover, .btn-primary:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #ffbe0b, #fb5607);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
         }
         
         /* Mode Selector for Asset & Portfolio tabs */
@@ -354,7 +388,7 @@
             <div class="config-actions">
                 <button class="btn-secondary" id="resetConfigBtn">重置</button>
                 <button class="btn-save" id="saveConfigBtn">保存配置</button>
-                <button class="btn-restart" id="restartServiceBtn" style="display: none; background: var(--warning);">
+                <button class="btn-warning" id="restartServiceBtn" style="display: none;">
                     🔄 重启服务
                 </button>
             </div>
@@ -374,13 +408,13 @@
             </div>
             
             <div class="config-actions" style="margin: 1.5rem 0;">
-                <button class="btn-run" id="runBacktestBtn" style="background: var(--accent-blue); display: none;">
-                    🚀 开启回测
+                <button class="btn-primary" id="runBacktestBtn" style="display: none;">
+                    🚀 开始回测
                 </button>
-                <button class="btn-run" id="runSimulateBtn" style="background: var(--warning); display: none;">
-                    🎯 开启模拟
+                <button class="btn-warning" id="runSimulateBtn" style="display: none;">
+                    🎯 开始模拟
                 </button>
-                <button class="btn-run" id="runRealBtn" style="background: var(--danger); display: none;">
+                <button class="btn-danger" id="runRealBtn" style="display: none;">
                     ⚡ 开始实盘
                 </button>
             </div>
