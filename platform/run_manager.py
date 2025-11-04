@@ -140,11 +140,10 @@ class RunManager:
             Dictionary containing results data or None if no results
         """
         try:
-            # Get data path for the strategy
+            # Get data path for the strategy (already includes agent_data)
             data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
-            agent_data_dir = data_path / "agent_data"
             
-            if not agent_data_dir.exists():
+            if not data_path.exists():
                 return None
             
             results = {
@@ -155,7 +154,7 @@ class RunManager:
             }
             
             # Load asset evolution data
-            asset_file = agent_data_dir / "asset_evolution.json"
+            asset_file = data_path / "asset_evolution.json"
             if asset_file.exists():
                 with open(asset_file, 'r', encoding='utf-8') as f:
                     asset_data = json.load(f)
@@ -175,13 +174,13 @@ class RunManager:
                         }
             
             # Load portfolio data
-            portfolio_file = agent_data_dir / "portfolio.json"
+            portfolio_file = data_path / "portfolio.json"
             if portfolio_file.exists():
                 with open(portfolio_file, 'r', encoding='utf-8') as f:
                     results["portfolio"] = json.load(f)
             
             # Load trades data
-            trades_file = agent_data_dir / "trades.json"
+            trades_file = data_path / "trades.json"
             if trades_file.exists():
                 with open(trades_file, 'r', encoding='utf-8') as f:
                     results["trades"] = json.load(f)

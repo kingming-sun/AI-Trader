@@ -1,0 +1,12 @@
+{
+  "agent_config": {
+    "max_steps": 30,
+    "max_retries": 3,
+    "base_delay": 1.0,
+    "initial_cash": 10000
+  },
+  "date_range": {
+    "init_date": "2025-10-01",
+    "end_date": "2025-10-31"
+  }
+}

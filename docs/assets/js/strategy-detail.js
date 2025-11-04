@@ -36,6 +36,11 @@ class StrategyDetail {
             this.updateDateRangeVisibility();
         }
         
+        // Update run buttons visibility for asset tab
+        if (this.currentTab === 'asset') {
+            this.updateAssetRunButtonsVisibility();
+        }
+        
         // Load initial data based on active tab
         this.loadTabContent(this.currentTab);
     }
@@ -79,6 +84,12 @@ class StrategyDetail {
         });
         
         this.currentTab = tabId;
+        
+        // Update run buttons visibility when switching to asset tab
+        if (tabId === 'asset') {
+            this.updateAssetRunButtonsVisibility();
+        }
+        
         this.loadTabContent(tabId);
     }
 
@@ -116,6 +127,7 @@ class StrategyDetail {
                     this.loadConfigData();
                 } else if (parentTab.id === 'asset-tab') {
                     this.currentMode = mode;
+                    this.updateAssetRunButtonsVisibility();
                     this.loadAssetData();
                     // Reload log dates when mode changes
                     this.loadAvailableLogDates();
@@ -161,6 +173,35 @@ class StrategyDetail {
                 input.disabled = true;
                 input.value = ''; // Clear values
             });
+        }
+    }
+    
+    // Update run button visibility based on config mode (for config tab)
+    updateRunButtonsVisibility() {
+        // This is now unused, but kept for backward compatibility
+        // Run buttons are now in asset tab
+    }
+    
+    // Update run button visibility based on asset mode (for asset tab)
+    updateAssetRunButtonsVisibility() {
+        const runBacktestBtn = document.getElementById('runBacktestBtn');
+        const runSimulateBtn = document.getElementById('runSimulateBtn');
+        const runRealBtn = document.getElementById('runRealBtn');
+        
+        // Hide all buttons first
+        if (runBacktestBtn) runBacktestBtn.style.display = 'none';
+        if (runSimulateBtn) runSimulateBtn.style.display = 'none';
+        if (runRealBtn) runRealBtn.style.display = 'none';
+        
+        // Show button for current asset mode (only in asset tab)
+        if (this.currentTab === 'asset') {
+            if (this.currentMode === 'backtest' && runBacktestBtn) {
+                runBacktestBtn.style.display = 'inline-block';
+            } else if (this.currentMode === 'simulate' && runSimulateBtn) {
+                runSimulateBtn.style.display = 'inline-block';
+            } else if (this.currentMode === 'real' && runRealBtn) {
+                runRealBtn.style.display = 'inline-block';
+            }
         }
     }
 
@@ -794,6 +835,19 @@ class StrategyDetail {
         document.getElementById('restartServiceBtn')?.addEventListener('click', () => {
             this.restartService();
         });
+        
+        // Run strategy buttons
+        document.getElementById('runBacktestBtn')?.addEventListener('click', () => {
+            this.runStrategy('backtest');
+        });
+        
+        document.getElementById('runSimulateBtn')?.addEventListener('click', () => {
+            this.runStrategy('simulate');
+        });
+        
+        document.getElementById('runRealBtn')?.addEventListener('click', () => {
+            this.runStrategy('real');
+        });
     }
 
     // Save configuration
@@ -844,6 +898,76 @@ class StrategyDetail {
         } catch (error) {
             console.error('Error saving configuration:', error);
             alert('保存失败: ' + error.message);
+        }
+    }
+    
+    // Run strategy in specific mode
+    async runStrategy(mode) {
+        // Special confirmation for real trading
+        if (mode === 'real') {
+            const confirmed = confirm(
+                '⚠️ 确定要启动实盘交易吗？\n\n' +
+                '这将使用真实资金并执行真实交易。\n\n' +
+                '请确保：\n' +
+                '1. 已充分测试策略\n' +
+                '2. 已配置风险控制参数\n' +
+                '3. 已准备好承担交易风险\n\n' +
+                '是否继续？'
+            );
+            if (!confirmed) {
+                return;
+            }
+        } else if (mode === 'simulate') {
+            const confirmed = confirm(
+                '确定要启动模拟盘交易吗？\n\n' +
+                '这将使用实时市场数据进行模拟交易。'
+            );
+            if (!confirmed) {
+                return;
+            }
+        } else {
+            const confirmed = confirm(
+                '确定要启动回测吗？\n\n' +
+                '这将使用历史数据运行策略回测。'
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
+        
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/run/${mode}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirm: mode === 'real' })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || `Failed to run ${mode}`);
+            }
+            
+            const result = await response.json();
+            const modeText = mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘';
+            
+            alert(`✅ ${modeText}已启动！\n\n请稍后查看结果。`);
+            
+            // Switch to asset tab to see results
+            setTimeout(() => {
+                this.switchTab('asset');
+                this.currentMode = mode;
+                // Update mode selector active state
+                document.querySelectorAll('#asset-tab .mode-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.mode === mode);
+                });
+                // Update run buttons visibility
+                this.updateAssetRunButtonsVisibility();
+                // Reload asset data
+                this.loadAssetData();
+            }, 1000);
+        } catch (error) {
+            console.error(`Error running ${mode}:`, error);
+            alert(`❌ 启动${mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘'}失败：${error.message}`);
         }
     }
     

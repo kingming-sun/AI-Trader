@@ -1,0 +1,31 @@
+{
+  "holdings": [
+    {
+      "symbol": "AAPL",
+      "shares": 50,
+      "cost": 150,
+      "current": 175,
+      "pnl": 1250,
+      "pnlPercent": 16.67
+    },
+    {
+      "symbol": "GOOGL",
+      "shares": 20,
+      "cost": 2800,
+      "current": 2950,
+      "pnl": 3000,
+      "pnlPercent": 5.36
+    },
+    {
+      "symbol": "MSFT",
+      "shares": 30,
+      "cost": 350,
+      "current": 380,
+      "pnl": 900,
+      "pnlPercent": 8.57
+    }
+  ],
+  "cash_balance": 3600,
+  "total_value": 12000,
+  "stock_value": 8400
+}
