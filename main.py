@@ -125,33 +125,33 @@ async def main(config_path=None):
         
         # Environment variables can override dates in configuration file
         if os.getenv("INIT_DATE"):
-        INIT_DATE = os.getenv("INIT_DATE")
-        print(f"⚠️  Using environment variable to override INIT_DATE: {INIT_DATE}")
-    if os.getenv("END_DATE"):
-        END_DATE = os.getenv("END_DATE")
-        print(f"⚠️  Using environment variable to override END_DATE: {END_DATE}")
-    
+            INIT_DATE = os.getenv("INIT_DATE")
+            print(f"⚠️  Using environment variable to override INIT_DATE: {INIT_DATE}")
+        if os.getenv("END_DATE"):
+            END_DATE = os.getenv("END_DATE")
+            print(f"⚠️  Using environment variable to override END_DATE: {END_DATE}")
+        
         # Validate date range
-    INIT_DATE_obj = datetime.strptime(INIT_DATE, "%Y-%m-%d").date()
-    END_DATE_obj = datetime.strptime(END_DATE, "%Y-%m-%d").date()
-    if INIT_DATE_obj > END_DATE_obj:
-        print("❌ INIT_DATE is greater than END_DATE")
-        exit(1)
+        INIT_DATE_obj = datetime.strptime(INIT_DATE, "%Y-%m-%d").date()
+        END_DATE_obj = datetime.strptime(END_DATE, "%Y-%m-%d").date()
+        if INIT_DATE_obj > END_DATE_obj:
+            print("❌ INIT_DATE is greater than END_DATE")
+            exit(1)
  
         # Get model list from configuration file (only select enabled models)
-    enabled_models = [
-        model for model in config["models"] 
-        if model.get("enabled", True)
-    ]
-    
+        enabled_models = [
+            model for model in config["models"] 
+            if model.get("enabled", True)
+        ]
+        
         # Get agent configuration
-    agent_config = config.get("agent_config", {})
-    log_config = config.get("log_config", {})
-    max_steps = agent_config.get("max_steps", 10)
-    max_retries = agent_config.get("max_retries", 3)
-    base_delay = agent_config.get("base_delay", 0.5)
-    initial_cash = agent_config.get("initial_cash", 10000.0)
-    
+        agent_config = config.get("agent_config", {})
+        log_config = config.get("log_config", {})
+        max_steps = agent_config.get("max_steps", 10)
+        max_retries = agent_config.get("max_retries", 3)
+        base_delay = agent_config.get("base_delay", 0.5)
+        initial_cash = agent_config.get("initial_cash", 10000.0)
+        
         # Display enabled model information
         model_names = [m.get("name", m.get("signature")) for m in enabled_models]
         

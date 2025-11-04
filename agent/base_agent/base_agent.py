@@ -147,12 +147,19 @@ class BaseAgent:
         """Initialize MCP client and AI model"""
         print(f"🚀 Initializing agent: {self.signature}")
         
-        # Create MCP client
-        self.client = MultiServerMCPClient(self.mcp_config)
-        
-        # Get tools
-        self.tools = await self.client.get_tools()
-        print(f"✅ Loaded {len(self.tools)} MCP tools")
+        try:
+            # Create MCP client
+            self.client = MultiServerMCPClient(self.mcp_config)
+            
+            # Get tools
+            self.tools = await self.client.get_tools()
+            print(f"✅ Loaded {len(self.tools)} MCP tools")
+        except Exception as e:
+            print(f"❌ Failed to initialize MCP client: {e}")
+            print(f"   Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            raise
         
         # Create AI model
         self.model = ChatOpenAI(

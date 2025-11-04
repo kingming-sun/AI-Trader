@@ -8,7 +8,7 @@ load_dotenv()
 def _load_runtime_env() -> dict:
     path = os.environ.get("RUNTIME_ENV_PATH")
     try:
-        if os.path.exists(path):
+        if path and path.strip() and os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
@@ -29,6 +29,11 @@ def write_config_value(key: str, value: any):
     _RUNTIME_ENV = _load_runtime_env()
     _RUNTIME_ENV[key] = value
     path = os.environ.get("RUNTIME_ENV_PATH")
+    if not path or path.strip() == "":
+        # Use default path if RUNTIME_ENV_PATH is not set
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "runtime_env.json")
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(_RUNTIME_ENV, f, ensure_ascii=False, indent=4)
 
