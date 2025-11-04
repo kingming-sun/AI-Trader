@@ -49,50 +49,8 @@
             </div>
         </div>
 
-        <section class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">活跃代理</div>
-                <div class="stat-value" id="agent-count">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">交易周期</div>
-                <div class="stat-value" id="trading-period">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">最佳表现者</div>
-                <div class="stat-value" id="best-performer">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">最佳回报率</div>
-                <div class="stat-value" id="avg-return">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">交易模式</div>
-                <div class="stat-value" id="trading-mode" style="font-weight: 600;">-</div>
-            </div>
-        </section>
 
-        <section class="chart-section">
-            <div class="chart-card hero">
-                <div class="chart-header">
-                    <h3>总资产价值变化</h3>
-                    <div class="chart-controls">
-                        <button class="btn-secondary" id="toggle-log">线性坐标</button>
-                        <button class="btn-secondary" id="export-chart">导出数据</button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="assetChart"></canvas>
-                </div>
-            </div>
-        </section>
-
-        <section class="legend-section">
-            <h3>代理图例</h3>
-            <div class="agent-legend" id="agentLegend"></div>
-        </section>
-
-        <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-overlay hidden" id="loadingOverlay">
             <div class="spinner"></div>
             <p>正在加载交易数据...</p>
             <p id="loadingProgress" style="margin-top: 1rem; font-size: 0.9rem; opacity: 0.8;">请稍候...</p>
@@ -108,9 +66,15 @@
     </footer>
 
     <script>
-        // Simple redirect to strategies page after 3 seconds, or user can click immediately
-        console.log('✅ AI-Trader Platform loaded successfully');
-        console.log('📍 Navigate to strategies.html to manage your trading strategies');
+        // Ensure loading overlay is hidden on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+            }
+            console.log('✅ AI-Trader Platform loaded successfully');
+            console.log('📍 Navigate to strategies.html to manage your trading strategies');
+        });
     </script>
 </body>
 </html>
