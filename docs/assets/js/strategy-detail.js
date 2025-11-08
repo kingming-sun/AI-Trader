@@ -1176,6 +1176,17 @@ class StrategyDetail {
         document.getElementById('stopRunBtn')?.addEventListener('click', () => {
             this.stopRun();
         });
+        
+        // Save backtest dates button (use event delegation on document)
+        document.addEventListener('click', async (e) => {
+            const btn = e.target.closest('#saveBacktestDatesBtn');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('💾 Save backtest dates button clicked');
+                await this.saveBacktestDatesFromInputs();
+            }
+        });
     }
 
     // Save configuration
@@ -1479,23 +1490,36 @@ class StrategyDetail {
             }
             
             // Update log content (only add new logs, avoid duplicates)
-            if (status.latest_log && logContent) {
-                const currentContent = logContent.innerHTML;
-                const logText = status.latest_log.trim();
-                
-                // Only add if it's a new log (simple check - not already in content)
-                if (!currentContent.includes(logText.substring(0, 50))) {
-                    const timestamp = new Date().toLocaleTimeString('zh-CN');
-                    const logEntry = `[${timestamp}] ${logText}`;
-                    const logDiv = document.createElement('div');
-                    logDiv.style.cssText = 'color: var(--accent-cyan); margin-bottom: 0.5rem; font-family: monospace;';
-                    logDiv.textContent = logEntry;
-                    logContent.appendChild(logDiv);
+            if (logContent) {
+                // Remove "等待日志输出..." message if we have logs
+                if (status.latest_log) {
+                    const currentContent = logContent.innerHTML;
+                    const logText = status.latest_log.trim();
                     
-                    // Auto scroll to bottom
-                    const logContainer = document.getElementById('runLogContainer');
-                    if (logContainer) {
-                        logContainer.scrollTop = logContainer.scrollHeight;
+                    // Check if this is the "等待日志输出..." placeholder
+                    if (currentContent.includes('等待日志输出')) {
+                        logContent.innerHTML = ''; // Clear placeholder
+                    }
+                    
+                    // Only add if it's a new log (simple check - not already in content)
+                    if (!currentContent.includes(logText.substring(0, 50))) {
+                        const timestamp = new Date().toLocaleTimeString('zh-CN');
+                        const logEntry = `[${timestamp}] ${logText}`;
+                        const logDiv = document.createElement('div');
+                        logDiv.style.cssText = 'color: var(--accent-cyan); margin-bottom: 0.5rem; font-family: monospace;';
+                        logDiv.textContent = logEntry;
+                        logContent.appendChild(logDiv);
+                        
+                        // Auto scroll to bottom
+                        const logContainer = document.getElementById('runLogContainer');
+                        if (logContainer) {
+                            logContainer.scrollTop = logContainer.scrollHeight;
+                        }
+                    }
+                } else if (logContent.innerHTML.trim() === '' || logContent.innerHTML.includes('等待日志输出')) {
+                    // Keep "等待日志输出..." if no logs yet
+                    if (!logContent.innerHTML.includes('等待日志输出')) {
+                        logContent.innerHTML = '<div style="color: var(--text-muted);">等待日志输出...</div>';
                     }
                 }
             }
@@ -1624,33 +1648,46 @@ class StrategyDetail {
     
     // Load available data range for asset page
     async loadAvailableDataRangeForAsset() {
+        const rangeSpan = document.getElementById('assetAvailableRange');
+        if (!rangeSpan) return;
+        
         try {
             const response = await fetch(`${this.apiBase}/api/data/available-range`);
-            if (!response.ok) return;
+            if (!response.ok) {
+                rangeSpan.textContent = '加载失败，请检查 API 服务';
+                console.error('Failed to load data range:', response.status, response.statusText);
+                return;
+            }
             
             const data = await response.json();
-            const rangeSpan = document.getElementById('assetAvailableRange');
             
-            if (rangeSpan) {
-                if (data.available) {
-                    rangeSpan.textContent = `${data.start_date} 至 ${data.end_date}`;
-                    
-                    // Set min/max attributes on date inputs
-                    const startInput = document.getElementById('assetStartDate');
-                    const endInput = document.getElementById('assetEndDate');
-                    
-                    if (startInput && endInput) {
-                        startInput.min = data.start_date;
-                        startInput.max = data.end_date;
-                        endInput.min = data.start_date;
-                        endInput.max = data.end_date;
-                    }
-                } else {
-                    rangeSpan.textContent = '无本地数据（将自动从 API 获取）';
+            if (!data.success) {
+                rangeSpan.textContent = data.error || '加载失败';
+                console.error('API returned error:', data.error);
+                return;
+            }
+            
+            if (data.available) {
+                rangeSpan.textContent = `${data.start_date} 至 ${data.end_date}`;
+                
+                // Set min/max attributes on date inputs
+                const startInput = document.getElementById('assetStartDate');
+                const endInput = document.getElementById('assetEndDate');
+                
+                if (startInput && endInput) {
+                    startInput.min = data.start_date;
+                    startInput.max = data.end_date;
+                    endInput.min = data.start_date;
+                    endInput.max = data.end_date;
                 }
+            } else {
+                rangeSpan.textContent = '无本地数据（将自动从 API 获取）';
             }
         } catch (error) {
             console.error('Error loading available data range:', error);
+            if (rangeSpan) {
+                rangeSpan.textContent = '加载失败: ' + error.message;
+            }
         }
     }
     
@@ -1676,9 +1713,46 @@ class StrategyDetail {
         }
     }
     
+    // Save backtest dates from input fields
+    async saveBacktestDatesFromInputs() {
+        console.log('📝 saveBacktestDatesFromInputs called');
+        const startDateInput = document.getElementById('assetStartDate');
+        const endDateInput = document.getElementById('assetEndDate');
+        
+        console.log('📅 Start date input:', startDateInput);
+        console.log('📅 End date input:', endDateInput);
+        
+        if (!startDateInput || !endDateInput) {
+            alert('❌ 无法找到日期输入框');
+            return;
+        }
+        
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+        
+        if (!startDate || !endDate) {
+            alert('❌ 请填写完整的日期范围（开始日期和结束日期）');
+            return;
+        }
+        
+        if (new Date(startDate) > new Date(endDate)) {
+            alert('❌ 开始日期不能晚于结束日期');
+            return;
+        }
+        
+        try {
+            await this.saveBacktestDates(startDate, endDate);
+            alert('✅ 回测日期范围已保存');
+        } catch (error) {
+            console.error('Error saving backtest dates:', error);
+            alert(`❌ 保存失败：${error.message}`);
+        }
+    }
+    
     // Save backtest dates before running
     async saveBacktestDates(startDate, endDate) {
         try {
+            // First, get existing config
             const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/config/backtest`);
             let config = {};
             
@@ -1687,27 +1761,39 @@ class StrategyDetail {
                 config = data.config || data || {};
             }
             
+            // Ensure config has required structure
+            if (!config.agent_config) {
+                config.agent_config = {
+                    max_steps: 30,
+                    max_retries: 3,
+                    base_delay: 1.0,
+                    initial_cash: 10000.0
+                };
+            }
+            
             // Update date range
             config.date_range = {
                 init_date: startDate,
                 end_date: endDate
             };
             
-            // Save the updated config
+            // Save the updated config - send as {config: {...}} format
             const saveResponse = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/config/backtest`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
+                body: JSON.stringify({ config: config })
             });
             
             if (!saveResponse.ok) {
-                throw new Error('Failed to save backtest dates');
+                const errorData = await saveResponse.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Failed to save backtest dates');
             }
             
-            console.log('✅ Backtest dates saved successfully');
+            const saveData = await saveResponse.json();
+            console.log('✅ Backtest dates saved successfully:', saveData);
         } catch (error) {
             console.error('Error saving backtest dates:', error);
-            // Continue even if save fails, as the dates will be used directly
+            throw error; // Re-throw to allow caller to handle
         }
     }
 }

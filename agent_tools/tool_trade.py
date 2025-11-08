@@ -89,7 +89,18 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
             new_position[symbol] = new_position.get(symbol, 0) + amount
             
             # Record to position file
-            position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+            # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
+            from tools.general_tools import get_config_value
+            data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
+            if data_path:
+                position_file_path = os.path.join(data_path, "position", "position.jsonl")
+            else:
+                # Fallback to old structure
+                position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
+            
             with open(position_file_path, "a") as f:
                 print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position})}")
                 f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"buy","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}) + "\n")
@@ -146,10 +157,17 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
         new_position[symbol] += amount
         
         # Step 6: Record transaction to position.jsonl file
-        # Build file path: {project_root}/data/agent_data/{signature}/position/position.jsonl
-        # Use append mode ("a") to write new transaction record
-        # Each operation ID increments by 1, ensuring uniqueness of operation sequence
-        position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+        # Try new path structure first (from DATA_PATH environment variable)
+        data_path = os.getenv("DATA_PATH")
+        if data_path:
+            position_file_path = os.path.join(data_path, "position", "position.jsonl")
+        else:
+            # Fallback to old structure
+            position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
+        
         with open(position_file_path, "a") as f:
             # Write JSON format transaction record, containing date, operation ID, transaction details and updated position
             print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount},'positions': new_position})}")
@@ -223,7 +241,18 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
             new_position["CASH"] = new_position.get("CASH", 0) + (real_price * amount)
             
             # Record to position file
-            position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+            # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
+            from tools.general_tools import get_config_value
+            data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
+            if data_path:
+                position_file_path = os.path.join(data_path, "position", "position.jsonl")
+            else:
+                # Fallback to old structure
+                position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
+            
             with open(position_file_path, "a") as f:
                 print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position})}")
                 f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"sell","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}) + "\n")
@@ -274,10 +303,17 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
     new_position["CASH"] = new_position.get("CASH", 0) + this_symbol_price * amount
 
     # Step 6: Record transaction to position.jsonl file
-    # Build file path: {project_root}/data/agent_data/{signature}/position/position.jsonl
-    # Use append mode ("a") to write new transaction record
-    # Each operation ID increments by 1, ensuring uniqueness of operation sequence
-    position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+    # Try new path structure first (from DATA_PATH environment variable)
+    data_path = os.getenv("DATA_PATH")
+    if data_path:
+        position_file_path = os.path.join(data_path, "position", "position.jsonl")
+    else:
+        # Fallback to old structure
+        position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
+    
     with open(position_file_path, "a") as f:
         # Write JSON format transaction record, containing date, operation ID and updated position
         print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount},'positions': new_position})}")

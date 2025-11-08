@@ -149,18 +149,59 @@ def save_strategy_config(strategy_id, mode):
             return jsonify({"success": False, "error": "Invalid mode"}), 400
         
         data = request.get_json()
-        config = data.get('config', {})
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        # Handle both formats: {config: {...}} or direct config object
+        config = data.get('config', data)
+        
+        # Always merge with existing config to preserve other settings
+        try:
+            existing_config = strategy_manager.get_strategy_config(strategy_id, mode)
+            # Merge: existing config as base, new config overrides
+            merged_config = existing_config.copy()
+            merged_config.update(config)
+            config = merged_config
+        except:
+            # If no existing config, try to load base config
+            try:
+                strategy_dir = strategy_manager.strategies_dir / strategy_id
+                base_config_file = strategy_dir / "base_config.json"
+                if base_config_file.exists():
+                    with open(base_config_file, 'r', encoding='utf-8') as f:
+                        base_config = json.load(f)
+                        # Merge base config with new config
+                        base_config.update(config)
+                        config = base_config
+            except:
+                # If still no config, ensure at least basic structure
+                if not config or config == {}:
+                    config = {}
+        
+        # Ensure config has required structure
+        if 'date_range' not in config:
+            config['date_range'] = {}
+        if 'agent_config' not in config:
+            config['agent_config'] = {
+                "max_steps": 30,
+                "max_retries": 3,
+                "base_delay": 1.0,
+                "initial_cash": 10000.0
+            }
         
         # Save config to file
         strategy_dir = strategy_manager.strategies_dir / strategy_id
+        strategy_dir.mkdir(parents=True, exist_ok=True)
         config_file = strategy_dir / f"{mode}_config.json"
         
         with open(config_file, 'w', encoding='utf-8') as f:
-            import json
             json.dump(config, f, indent=2, ensure_ascii=False)
         
         return jsonify({"success": True, "message": "Config saved successfully"})
     except Exception as e:
+        import traceback
+        print(f"Error saving strategy config: {e}")
+        print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/strategies/<strategy_id>/run/<mode>', methods=['POST'])
@@ -392,10 +433,21 @@ def get_log_content(strategy_id, mode, date):
 def get_available_data_range():
     """Get available date range from local data"""
     try:
-        from tools.data_validator import get_data_date_range
-        from pathlib import Path
+        # Add project root to path for imports
+        project_root = Path(__file__).parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
         
-        data_file = Path("data/merged.jsonl")
+        from tools.data_validator import get_data_date_range
+        
+        data_file = project_root / "data" / "merged.jsonl"
+        if not data_file.exists():
+            return jsonify({
+                "success": True,
+                "available": False,
+                "message": "本地没有可用的价格数据文件"
+            })
+        
         min_date, max_date = get_data_date_range(data_file)
         
         if min_date and max_date:

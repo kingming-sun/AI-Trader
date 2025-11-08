@@ -223,7 +223,8 @@ def get_yesterday_profit(today_date: str, yesterday_buy_prices: Dict[str, Option
 
 def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]:
     """
-    获取今日开盘时的初始持仓（即文件中上一个交易日代表的持仓）。从../data/agent_data/{modelname}/position/position.jsonl中读取。
+    获取今日开盘时的初始持仓（即文件中上一个交易日代表的持仓）。
+    优先从环境变量 DATA_PATH 获取路径，否则使用旧路径结构。
     如果同一日期有多条记录，选择id最大的记录作为初始持仓。
     
     Args:
@@ -234,7 +235,15 @@ def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]
         {symbol: weight} 的字典；若未找到对应日期，则返回空字典。
     """
     base_dir = Path(__file__).resolve().parents[1]
-    position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
+    
+    # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
+    from tools.general_tools import get_config_value
+    data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
+    if data_path:
+        position_file = Path(data_path) / "position" / "position.jsonl"
+    else:
+        # Fallback to old structure
+        position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
 
     if not position_file.exists():
         print(f"Position file {position_file} does not exist")
@@ -262,7 +271,8 @@ def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]
 
 def get_latest_position(today_date: str, modelname: str) -> Dict[str, float]:
     """
-    获取最新持仓。从 ../data/agent_data/{modelname}/position/position.jsonl 中读取。
+    获取最新持仓。
+    优先从环境变量 DATA_PATH 获取路径，否则使用旧路径结构。
     优先选择当天 (today_date) 中 id 最大的记录；
     若当天无记录，则回退到上一个交易日，选择该日中 id 最大的记录。
 
@@ -276,7 +286,15 @@ def get_latest_position(today_date: str, modelname: str) -> Dict[str, float]:
           - max_id: 选中记录的最大 id；若未找到任何记录，则为 -1。
     """
     base_dir = Path(__file__).resolve().parents[1]
-    position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
+    
+    # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
+    from tools.general_tools import get_config_value
+    data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
+    if data_path:
+        position_file = Path(data_path) / "position" / "position.jsonl"
+    else:
+        # Fallback to old structure
+        position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
 
     if not position_file.exists():
         return {}, -1
@@ -341,9 +359,20 @@ def add_no_trade_record(today_date: str, modelname: str):
     save_item["this_action"] = {"action":"no_trade","symbol":"","amount":0}
     
     save_item["positions"] = current_position
-    base_dir = Path(__file__).resolve().parents[1]
-    position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
-
+    
+    # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
+    from tools.general_tools import get_config_value
+    data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
+    if data_path:
+        position_file = Path(data_path) / "position" / "position.jsonl"
+    else:
+        # Fallback to old structure
+        base_dir = Path(__file__).resolve().parents[1]
+        position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
+    
+    # Ensure directory exists
+    position_file.parent.mkdir(parents=True, exist_ok=True)
+    
     with position_file.open("a", encoding="utf-8") as f:
         f.write(json.dumps(save_item) + "\n")
     return 

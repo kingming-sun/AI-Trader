@@ -103,11 +103,12 @@ class BaseAgent:
         self.base_log_path = log_path or "./data/agent_data"
         
         # Set OpenAI configuration
-        if openai_base_url==None:
+        # Use environment variables if not provided or if empty string
+        if openai_base_url is None or openai_base_url == "":
             self.openai_base_url = os.getenv("OPENAI_API_BASE")
         else:
             self.openai_base_url = openai_base_url
-        if openai_api_key==None:
+        if openai_api_key is None or openai_api_key == "":
             self.openai_api_key = os.getenv("OPENAI_API_KEY")
         else:
             self.openai_api_key = openai_api_key
@@ -355,22 +356,33 @@ class BaseAgent:
         dates = []
         max_date = None
         
+        # Parse date range first to filter position records
+        init_date_obj = datetime.strptime(init_date, "%Y-%m-%d")
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+        
         if not os.path.exists(self.position_file):
             self.register_agent()
             max_date = init_date
         else:
-            # Read existing position file, find latest date
+            # Read existing position file, find latest date within the requested range
             with open(self.position_file, "r") as f:
                 for line in f:
                     doc = json.loads(line)
                     current_date = doc['date']
-                    if max_date is None:
-                        max_date = current_date
-                    else:
-                        current_date_obj = datetime.strptime(current_date, "%Y-%m-%d")
-                        max_date_obj = datetime.strptime(max_date, "%Y-%m-%d")
-                        if current_date_obj > max_date_obj:
+                    current_date_obj = datetime.strptime(current_date, "%Y-%m-%d")
+                    
+                    # Only consider dates within the requested range
+                    if init_date_obj <= current_date_obj <= end_date_obj:
+                        if max_date is None:
                             max_date = current_date
+                        else:
+                            max_date_obj = datetime.strptime(max_date, "%Y-%m-%d")
+                            if current_date_obj > max_date_obj:
+                                max_date = current_date
+        
+        # If no date found in range, start from init_date
+        if max_date is None:
+            max_date = init_date
         
         # Check if new dates need to be processed
         max_date_obj = datetime.strptime(max_date, "%Y-%m-%d")
@@ -379,11 +391,17 @@ class BaseAgent:
         
         # Determine start date: respect init_date, but also allow resuming
         # If max_date is before init_date, start from init_date
-        # If max_date is on or after init_date, start from the day after max_date
+        # If max_date is on or after init_date but within the range, start from the day after max_date
+        # If max_date is after end_date, ignore it and start from init_date (different date range)
         if max_date_obj < init_date_obj:
             start_date_obj = init_date_obj
             print(f"📅 Last processed date ({max_date}) is before init_date ({init_date}), starting from {init_date}")
+        elif max_date_obj > end_date_obj:
+            # max_date is outside the requested range, ignore it and start from init_date
+            start_date_obj = init_date_obj
+            print(f"📅 Last processed date ({max_date}) is after end_date ({end_date}), starting from {init_date} (new date range)")
         else:
+            # max_date is within the range, resume from the day after
             start_date_obj = max_date_obj + timedelta(days=1)
             print(f"📅 Resuming from {start_date_obj.strftime('%Y-%m-%d')} (last processed: {max_date})")
         

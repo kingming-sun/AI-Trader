@@ -11,7 +11,11 @@ import time
 import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Literal
+from dotenv import load_dotenv
 from strategy_manager import StrategyManager, TradingMode
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import psutil with error handling
 try:
@@ -123,13 +127,30 @@ class RunManager:
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(run_info["config"], f, indent=2, ensure_ascii=False)
         
-        # Start main.py with the config
+        # Create log file for stdout/stderr
+        log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        # Clear old log file
+        if log_file.exists():
+            log_file.unlink()
+        
+        # Start main.py with the config, redirecting stdout and stderr to log file
         main_py = self.project_root / "main.py"
+        # Open log file in write mode (not append, since we cleared it)
+        # Use unbuffered mode to ensure immediate writes
+        log_f = open(log_file, 'w', encoding='utf-8', buffering=1)  # Line buffered
         process = subprocess.Popen(
-            [sys.executable, str(main_py), str(config_file)],
+            [sys.executable, '-u', str(main_py), str(config_file)],  # -u for unbuffered output
             cwd=str(self.project_root),
-            env=env
+            env=env,
+            stdout=log_f,
+            stderr=subprocess.STDOUT,  # Redirect stderr to stdout
+            text=True  # Text mode
         )
+        # Flush immediately to ensure first writes appear
+        log_f.flush()
+        # Note: log_f will be closed when process terminates
+        # Store log file handle in process info for potential cleanup
         
         # Store process info for status checking
         process_info_file = self.project_root / "logs" / f"{strategy_id}_{mode}_process.json"
@@ -360,6 +381,30 @@ class RunManager:
                 except:
                     pass
             
+            # Try to get latest log from stdout log file first
+            stdout_log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
+            if stdout_log_file.exists():
+                try:
+                    with open(stdout_log_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        if lines:
+                            # Get the last few non-empty lines (for better context)
+                            recent_lines = []
+                            for line in reversed(lines[-20:]):  # Check last 20 lines
+                                line = line.strip()
+                                if line and not line.startswith('#'):
+                                    recent_lines.insert(0, line)
+                                    if len(recent_lines) >= 3:  # Get last 3 meaningful lines
+                                        break
+                            if recent_lines:
+                                # Join last few lines for better context
+                                latest_log = ' | '.join(recent_lines[-2:])  # Last 2 lines
+                                if len(latest_log) > 400:
+                                    latest_log = latest_log[:400] + "..."
+                                progress_info["latest_log"] = latest_log
+                except Exception as e:
+                    print(f"Error reading stdout log: {e}")
+            
             # Try to get progress from config and position data
             config_file = self.project_root / "configs" / f"runtime_{strategy_id}_{mode}.json"
             if config_file.exists():
@@ -387,18 +432,37 @@ class RunManager:
                         if position_file.exists():
                             with open(position_file, 'r', encoding='utf-8') as f:
                                 lines = f.readlines()
-                                progress_info["processed_dates"] = len(lines)
                                 
-                                if lines:
-                                    last_position = json.loads(lines[-1])
-                                    progress_info["current_date"] = last_position.get("date")
+                                # Only count dates within the configured date range
+                                processed_dates_in_range = []
+                                for line in lines:
+                                    if not line.strip():
+                                        continue
+                                    try:
+                                        position = json.loads(line)
+                                        pos_date_str = position.get("date", "")
+                                        if pos_date_str:
+                                            pos_date = datetime.strptime(pos_date_str, "%Y-%m-%d")
+                                            # Only count dates within the configured range
+                                            if start_date <= pos_date <= end_date:
+                                                processed_dates_in_range.append(pos_date_str)
+                                    except:
+                                        continue
+                                
+                                progress_info["processed_dates"] = len(processed_dates_in_range)
+                                
+                                # Get the latest date within the range
+                                if processed_dates_in_range:
+                                    # Sort dates to get the latest one
+                                    sorted_dates = sorted(processed_dates_in_range)
+                                    progress_info["current_date"] = sorted_dates[-1]
                         
                         # Calculate progress
                         if progress_info["total_dates"] > 0:
                             progress_info["progress"] = int((progress_info["processed_dates"] / progress_info["total_dates"]) * 100)
             
-            # Get latest log entry
-            progress_info["latest_log"] = self._get_latest_log_entry(data_path)
+            # Get latest log entry (pass strategy_id and mode for better reliability)
+            progress_info["latest_log"] = self._get_latest_log_entry(data_path, strategy_id, mode)
             
             # Save progress for persistence
             with open(progress_file, 'w', encoding='utf-8') as f:
@@ -416,18 +480,83 @@ class RunManager:
                 "latest_log": None
             }
     
-    def _get_latest_log_entry(self, data_path: Path) -> Optional[str]:
-        """Get the latest log entry from log files"""
+    def _get_latest_log_entry(self, data_path: Path, strategy_id: Optional[str] = None, mode: Optional[str] = None) -> Optional[str]:
+        """Get the latest log entry from log files and stdout log"""
         try:
+            # First, try to get from stdout log file (real-time output)
+            # Extract strategy_id and mode from path if not provided
+            if not strategy_id or not mode:
+                if "strategies" in str(data_path):
+                    # Path structure: data/strategies/{strategy_id}/{mode}/agent_data
+                    parts = data_path.parts
+                    try:
+                        strategies_idx = parts.index("strategies")
+                        if strategies_idx + 2 < len(parts):
+                            strategy_id = parts[strategies_idx + 1]
+                            mode = parts[strategies_idx + 2]
+                    except (ValueError, IndexError):
+                        pass
+            
+            if strategy_id and mode:
+                stdout_log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
+                if stdout_log_file.exists():
+                    try:
+                        # Read last few lines from stdout log
+                        with open(stdout_log_file, 'r', encoding='utf-8') as f:
+                            lines = f.readlines()
+                            if lines:
+                                # Get the last non-empty line
+                                for line in reversed(lines):
+                                    line = line.strip()
+                                    if line and not line.startswith('#'):
+                                        # Truncate if too long
+                                        if len(line) > 300:
+                                            line = line[:300] + "..."
+                                        return line
+                    except Exception as e:
+                        print(f"Error reading stdout log: {e}")
+            
+            # Fallback: try to get from JSONL log file
             log_dir = data_path / "log"
             if not log_dir.exists():
                 return None
             
-            # Find the most recent date directory
-            date_dirs = sorted([d for d in log_dir.iterdir() if d.is_dir()], reverse=True)
+            # Get date range from config if available
+            date_range = None
+            if strategy_id and mode:
+                try:
+                    config_file = self.project_root / "configs" / f"runtime_{strategy_id}_{mode}.json"
+                    if config_file.exists():
+                        with open(config_file, 'r', encoding='utf-8') as f:
+                            config = json.load(f)
+                            date_range = config.get("date_range", {})
+                except:
+                    pass
+            
+            # Find date directories, filter by date range if available
+            date_dirs = []
+            for d in log_dir.iterdir():
+                if d.is_dir():
+                    if date_range:
+                        # Only include dates within the configured range
+                        try:
+                            from datetime import datetime
+                            dir_date = datetime.strptime(d.name, "%Y-%m-%d")
+                            start_date = datetime.strptime(date_range.get("init_date", ""), "%Y-%m-%d")
+                            end_date = datetime.strptime(date_range.get("end_date", ""), "%Y-%m-%d")
+                            if start_date <= dir_date <= end_date:
+                                date_dirs.append(d)
+                        except:
+                            # If date parsing fails, include it anyway
+                            date_dirs.append(d)
+                    else:
+                        date_dirs.append(d)
+            
             if not date_dirs:
                 return None
             
+            # Find the most recent date directory within range
+            date_dirs = sorted(date_dirs, key=lambda x: x.name, reverse=True)
             latest_date_dir = date_dirs[0]
             log_file = latest_date_dir / "log.jsonl"
             

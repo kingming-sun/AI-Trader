@@ -166,8 +166,9 @@ async def main(config_path=None):
             model_name = model_config.get("name", "unknown")
             basemodel = model_config.get("basemodel")
             signature = model_config.get("signature")
-            openai_base_url = model_config.get("openai_base_url",None)
-            openai_api_key = model_config.get("openai_api_key",None)
+            # Convert empty strings to None so environment variables can be used
+            openai_base_url = model_config.get("openai_base_url") or None
+            openai_api_key = model_config.get("openai_api_key") or None
 
             # Validate required fields
             if not basemodel:
@@ -186,6 +187,11 @@ async def main(config_path=None):
             write_config_value("SIGNATURE", signature)
             write_config_value("TODAY_DATE", END_DATE)
             write_config_value("IF_TRADE", False)
+            
+            # Write DATA_PATH to runtime_env.json so MCP services can access it
+            data_path = os.getenv("DATA_PATH")
+            if data_path:
+                write_config_value("DATA_PATH", data_path)
 
 
             # Get log path configuration

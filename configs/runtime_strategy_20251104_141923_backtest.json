@@ -6,8 +6,8 @@
   "status": "backtest",
   "agent_type": "BaseAgent",
   "date_range": {
-    "init_date": "2025-10-27",
-    "end_date": "2025-10-27"
+    "init_date": "2025-06-05",
+    "end_date": "2025-06-06"
   },
   "models": [
     {
@@ -18,13 +18,13 @@
     }
   ],
   "agent_config": {
-    "max_steps": 30,
-    "max_retries": 3,
     "base_delay": 1,
-    "initial_cash": 10000
+    "initial_cash": 10000,
+    "max_retries": 3,
+    "max_steps": 30
   },
   "log_config": {
     "log_path": "./data/strategies/strategy_20251104_141923"
   },
-  "updated_at": "2025-11-06T10:13:29.362854"
+  "updated_at": "2025-11-08T17:44:01.836905"
 }

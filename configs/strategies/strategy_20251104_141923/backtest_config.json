@@ -1,12 +1,30 @@
 {
-  "agent_config": {
-    "max_steps": 30,
-    "max_retries": 3,
-    "base_delay": 1,
-    "initial_cash": 10000
-  },
+  "strategy_id": "strategy_20251104_141923",
+  "strategy_name": "测试",
+  "description": "测试",
+  "created_at": "2025-11-04T14:19:23.648608",
+  "status": "backtest",
+  "agent_type": "BaseAgent",
   "date_range": {
-    "init_date": "2025-10-27",
-    "end_date": "2025-10-27"
-  }
+    "init_date": "2025-06-05",
+    "end_date": "2025-06-06"
+  },
+  "models": [
+    {
+      "name": "deepseek-chat-v3.1",
+      "basemodel": "deepseek-chat",
+      "signature": "deepseek-chat-v3.1",
+      "enabled": true
+    }
+  ],
+  "agent_config": {
+    "base_delay": 1,
+    "initial_cash": 10000,
+    "max_retries": 3,
+    "max_steps": 30
+  },
+  "log_config": {
+    "log_path": "./data/strategies/strategy_20251104_141923"
+  },
+  "updated_at": "2025-11-08T17:44:01.836905"
 }
