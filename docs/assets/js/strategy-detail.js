@@ -6,13 +6,99 @@ class StrategyDetail {
         // Use API_CONFIG if available (from api-config.js), otherwise fallback to localhost
         this.apiBase = window.API_CONFIG?.strategyApi || 'http://localhost:8005';
         this.strategyId = this.getStrategyIdFromUrl();
-        this.currentMode = 'backtest'; // backtest, simulate, or real
-        this.currentConfigMode = 'backtest'; // Mode for config tab
-        this.currentTab = 'config';
+        
+        // Initialize with defaults, will parse URL in init()
+        this.currentTab = 'asset';
+        this.currentMode = 'backtest';
+        this.currentConfigMode = 'backtest';
+        
         this.assetChart = null;
         this.allocationChart = null;
         this.statusCheckInterval = null; // 状态检查定时器
         this.isRunning = false; // 是否正在运行
+    }
+    
+    // Parse URL hash to get tab and mode state
+    parseUrlState() {
+        const hash = window.location.hash.slice(1); // Remove '#'
+        const [tab, mode] = hash.split('/');
+        
+        console.log(`🌐 Parsing URL state - Hash: ${hash}, Tab: ${tab}, Mode: ${mode}`);
+        
+        // Simple validation for tabs without DOM dependency
+        const validTabs = ['config', 'asset', 'portfolio'];
+        
+        // Set current tab
+        if (tab && validTabs.includes(tab)) {
+            this.currentTab = tab;
+        } else {
+            this.currentTab = 'asset'; // Default to asset tab
+        }
+        
+        // Set current mode for each tab type
+        if (mode && ['backtest', 'simulate', 'real'].includes(mode)) {
+            // Mode from URL takes priority
+            this.currentMode = mode;
+            this.currentConfigMode = mode;
+            console.log(`📊 Loaded mode from URL: ${mode}`);
+            // Save to localStorage for persistence
+            localStorage.setItem(`strategy_${this.strategyId}_mode`, mode);
+        } else {
+            // Load saved mode from localStorage if available
+            const savedMode = localStorage.getItem(`strategy_${this.strategyId}_mode`);
+            if (savedMode && ['backtest', 'simulate', 'real'].includes(savedMode)) {
+                this.currentMode = savedMode;
+                this.currentConfigMode = savedMode;
+                console.log(`💾 Loaded mode from localStorage: ${savedMode}`);
+            } else {
+                this.currentMode = 'backtest'; // Default mode
+                this.currentConfigMode = 'backtest';
+                console.log(`📌 Using default mode: backtest`);
+                // Save default to localStorage
+                localStorage.setItem(`strategy_${this.strategyId}_mode`, 'backtest');
+            }
+        }
+        
+        // Update URL with complete state (only if not already correct)
+        const expectedHash = `${this.currentTab}/${this.currentMode}`;
+        if (window.location.hash.slice(1) !== expectedHash) {
+            window.location.hash = expectedHash;
+            console.log(`🔄 Updated URL hash to: ${expectedHash}`);
+        }
+        
+        console.log(`✅ Final state - Tab: ${this.currentTab}, Mode: ${this.currentMode}, ConfigMode: ${this.currentConfigMode}`);
+    }
+    
+    // Update URL hash with current tab and mode
+    updateUrlState() {
+        const mode = this.currentTab === 'config' ? this.currentConfigMode : this.currentMode;
+        const newHash = `${this.currentTab}/${mode}`;
+        if (window.location.hash.slice(1) !== newHash) {
+            window.location.hash = newHash;
+            console.log(`🌐 URL state updated to: ${newHash}`);
+        }
+    }
+    
+    // Update mode buttons to reflect current state
+    updateModeButtons() {
+        console.log(`🔄 updateModeButtons - currentMode: ${this.currentMode}, currentConfigMode: ${this.currentConfigMode}`);
+        
+        // Update mode buttons in all tabs
+        document.querySelectorAll('#config-tab .mode-btn').forEach(btn => {
+            const isActive = btn.dataset.mode === this.currentConfigMode;
+            btn.classList.toggle('active', isActive);
+            if (isActive) console.log(`✅ Config tab: ${btn.dataset.mode} is active`);
+        });
+        document.querySelectorAll('#asset-tab .mode-btn').forEach(btn => {
+            const isActive = btn.dataset.mode === this.currentMode;
+            btn.classList.toggle('active', isActive);
+            if (isActive) console.log(`✅ Asset tab: ${btn.dataset.mode} is active`);
+        });
+        document.querySelectorAll('#portfolio-tab .mode-btn').forEach(btn => {
+            const isActive = btn.dataset.mode === this.currentMode;
+            btn.classList.toggle('active', isActive);
+            if (isActive) console.log(`✅ Portfolio tab: ${btn.dataset.mode} is active`);
+        });
     }
 
     // Get strategy ID from URL parameters
@@ -29,6 +115,20 @@ class StrategyDetail {
             return;
         }
 
+        // Parse URL state now that DOM is ready
+        this.parseUrlState();
+        
+        // Update active tab visually based on currentTab from parseUrlState
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === this.currentTab);
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === `${this.currentTab}-tab`);
+        });
+        
+        // Update active mode buttons based on saved state
+        this.updateModeButtons();
+
         await this.loadStrategyInfo();
         this.setupTabNavigation();
         this.setupModeSelector();
@@ -39,8 +139,11 @@ class StrategyDetail {
             this.updateDateRangeVisibility();
         }
         
-        // Update run buttons visibility for asset tab
+        // Update run buttons visibility for asset tab - this will also show date config for backtest mode
         if (this.currentTab === 'asset') {
+            // Force update the mode buttons first to ensure correct state
+            this.updateModeButtons();
+            // Then update visibility
             this.updateAssetRunButtonsVisibility();
         }
         
@@ -49,23 +152,42 @@ class StrategyDetail {
         
         // Check if there's a running strategy when loading asset tab
         if (this.currentTab === 'asset') {
-            this.checkRunStatusOnLoad();
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                this.checkRunStatusOnLoad();
+            }, 500);
         }
     }
     
     // Check run status on page load
     async checkRunStatusOnLoad() {
         try {
+            console.log(`🔍 Checking run status on load for ${this.currentMode}...`);
             const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/status/${this.currentMode}`);
             if (response.ok) {
                 const data = await response.json();
-                if (data.success && data.status.is_running) {
-                    this.showRunStatus(this.currentMode);
-                    this.startStatusMonitoring(this.currentMode);
+                console.log('📊 Run status response:', data);
+                if (data.success && data.status) {
+                    const status = data.status;
+                    if (status.is_running) {
+                        console.log('✅ Strategy is running, starting status monitoring...');
+                        this.showRunStatus(this.currentMode);
+                        this.startStatusMonitoring(this.currentMode);
+                        // Update display immediately
+                        this.updateRunStatusDisplay(status, this.currentMode);
+                    } else {
+                        console.log(`ℹ️  Strategy is not running (status: ${status.status})`);
+                        // Still update display to show the current state
+                        this.updateRunStatusDisplay(status, this.currentMode);
+                    }
+                } else {
+                    console.warn('⚠️  Status check response format unexpected:', data);
                 }
+            } else {
+                console.error('❌ Status check failed:', response.status, response.statusText);
             }
         } catch (error) {
-            console.error('Error checking run status on load:', error);
+            console.error('❌ Error checking run status on load:', error);
         }
     }
 
@@ -108,6 +230,9 @@ class StrategyDetail {
         });
         
         this.currentTab = tabId;
+        
+        // Update URL to preserve state
+        this.updateUrlState();
         
         // Update run buttons visibility when switching to asset tab
         if (tabId === 'asset') {
@@ -159,6 +284,12 @@ class StrategyDetail {
                     this.currentMode = mode;
                     this.loadPortfolioData();
                 }
+                
+                // Save mode to localStorage
+                localStorage.setItem(`strategy_${this.strategyId}_mode`, mode);
+                
+                // Update URL to preserve mode state
+                this.updateUrlState();
             });
         });
     }
@@ -176,40 +307,10 @@ class StrategyDetail {
         }
     }
 
-    // Update date range visibility based on config mode
+    // Update date range visibility based on config mode (removed - now handled in asset page)
     updateDateRangeVisibility() {
-        const dateRangeSection = document.getElementById('dateRangeSection');
-        if (!dateRangeSection) return;
-        
-        const hint = dateRangeSection.querySelector('.mode-hint');
-        const dataHint = document.getElementById('dataAvailabilityHint');
-        const inputs = dateRangeSection.querySelectorAll('input[type="date"]');
-        
-        if (this.currentConfigMode === 'backtest') {
-            // Show date range inputs for backtest
-            dateRangeSection.style.display = 'block';
-            if (hint) hint.style.display = 'none';
-            inputs.forEach(input => input.disabled = false);
-            
-            // Show data availability hint and load range
-            if (dataHint) {
-                dataHint.style.display = 'block';
-                this.loadAvailableDataRange();
-            }
-        } else {
-            // Hide date range inputs for simulate/real
-            dateRangeSection.style.display = 'block'; // Keep section visible but show hint
-            if (hint) hint.style.display = 'block';
-            inputs.forEach(input => {
-                input.disabled = true;
-                input.value = ''; // Clear values
-            });
-            
-            // Hide data availability hint
-            if (dataHint) {
-                dataHint.style.display = 'none';
-            }
-        }
+        // This function is kept for compatibility but no longer does anything
+        // Date configuration has been moved to the asset page
     }
     
     // Load available data range from server
@@ -264,20 +365,146 @@ class StrategyDetail {
         const runBacktestBtn = document.getElementById('runBacktestBtn');
         const runSimulateBtn = document.getElementById('runSimulateBtn');
         const runRealBtn = document.getElementById('runRealBtn');
+        const buttonHint = document.getElementById('buttonHint');
+        const modeDescText = document.getElementById('modeDescText');
+        const assetModeDescText = document.getElementById('assetModeDescText');
+        const backtestDateConfig = document.getElementById('backtestDateConfig');
+        const realtimeConfig = document.getElementById('realtimeConfig');
+        const realtimeConfigDesc = document.getElementById('realtimeConfigDesc');
+        
+        console.log(`🎯 updateAssetRunButtonsVisibility called - Current mode: ${this.currentMode}, Current tab: ${this.currentTab}`);
+        console.log(`📍 DOM elements found:`, {
+            backtestDateConfig: !!backtestDateConfig,
+            realtimeConfig: !!realtimeConfig,
+            runBacktestBtn: !!runBacktestBtn,
+            runSimulateBtn: !!runSimulateBtn,
+            runRealBtn: !!runRealBtn
+        });
         
         // Hide all buttons first
         if (runBacktestBtn) runBacktestBtn.style.display = 'none';
         if (runSimulateBtn) runSimulateBtn.style.display = 'none';
         if (runRealBtn) runRealBtn.style.display = 'none';
         
-        // Show button for current asset mode (only in asset tab)
+        // Update mode descriptions and show button for current mode
         if (this.currentTab === 'asset') {
-            if (this.currentMode === 'backtest' && runBacktestBtn) {
-                runBacktestBtn.style.display = 'inline-block';
-            } else if (this.currentMode === 'simulate' && runSimulateBtn) {
-                runSimulateBtn.style.display = 'inline-block';
-            } else if (this.currentMode === 'real' && runRealBtn) {
-                runRealBtn.style.display = 'inline-block';
+            let modeDesc = '';
+            let btnHint = '';
+            
+            console.log(`🔍 updateAssetRunButtonsVisibility - Processing mode: ${this.currentMode}`);
+            
+            if (this.currentMode === 'backtest') {
+                // Show backtest button and date config
+                if (runBacktestBtn) {
+                    runBacktestBtn.style.display = 'inline-block';
+                    console.log('✅ Showing backtest button');
+                }
+                if (backtestDateConfig) {
+                    backtestDateConfig.style.display = 'block';
+                    console.log('✅ Showing backtest date config');
+                } else {
+                    console.error('❌ backtestDateConfig element not found!');
+                }
+                if (realtimeConfig) {
+                    realtimeConfig.style.display = 'none';
+                    console.log('✅ Hiding realtime config');
+                }
+                
+                modeDesc = '<strong>回测模式：</strong>使用历史数据验证策略，需设置日期范围';
+                btnHint = '提示：将处理配置的日期范围内的所有交易日';
+                
+                if (modeDescText) {
+                    modeDescText.innerHTML = `
+                        <div>📊 <strong>回测模式</strong></div>
+                        <div style="margin-top: 0.5rem;">✅ 使用历史数据 (merged.jsonl)</div>
+                        <div>✅ 设置日期范围进行测试</div>
+                        <div>✅ 处理完所有日期后自动结束</div>
+                        <div>✅ 无资金风险</div>
+                    `;
+                }
+                
+                // Load available data range for backtest
+                this.loadAvailableDataRangeForAsset();
+                
+                // Load saved backtest dates
+                this.loadBacktestDatesForAsset();
+                
+            } else if (this.currentMode === 'simulate') {
+                // Show simulate button and realtime config
+                if (runSimulateBtn) {
+                    runSimulateBtn.style.display = 'inline-block';
+                    console.log('✅ Showing simulate button');
+                }
+                if (backtestDateConfig) {
+                    backtestDateConfig.style.display = 'none';
+                    console.log('✅ Hiding backtest date config');
+                }
+                if (realtimeConfig) {
+                    realtimeConfig.style.display = 'block';
+                    console.log('✅ Showing realtime config');
+                }
+                
+                modeDesc = '<strong>模拟盘模式：</strong>从当前时间开始，使用实时数据进行模拟交易';
+                btnHint = '提示：从当前时间开始，使用实时数据进行模拟交易';
+                
+                if (modeDescText) {
+                    modeDescText.innerHTML = `
+                        <div>🎯 <strong>模拟盘模式</strong></div>
+                        <div style="margin-top: 0.5rem;">✅ 使用 Moomoo 实时市场数据</div>
+                        <div>✅ 从当前时间开始交易</div>
+                        <div>✅ 持续运行直到手动停止</div>
+                        <div>✅ 模拟账户，无真实资金</div>
+                    `;
+                }
+                
+                if (realtimeConfigDesc) {
+                    const today = new Date().toISOString().split('T')[0];
+                    realtimeConfigDesc.innerHTML = `
+                        <div>📅 开始日期: <strong>${today}</strong> (今天)</div>
+                        <div style="margin-top: 0.5rem;">🔄 持续运行，无结束日期</div>
+                        <div style="margin-top: 0.5rem; color: var(--accent-cyan);">ℹ️ 系统将使用 Moomoo API 获取实时行情数据</div>
+                    `;
+                }
+                
+            } else if (this.currentMode === 'real') {
+                // Show real button and realtime config
+                if (runRealBtn) runRealBtn.style.display = 'inline-block';
+                if (backtestDateConfig) backtestDateConfig.style.display = 'none';
+                if (realtimeConfig) realtimeConfig.style.display = 'block';
+                
+                modeDesc = '<strong>实盘模式：</strong>从当前时间开始，使用真实资金进行交易';
+                btnHint = '⚠️ 警告：将从当前时间开始使用真实资金交易';
+                
+                if (modeDescText) {
+                    modeDescText.innerHTML = `
+                        <div>⚡ <strong>实盘模式</strong></div>
+                        <div style="margin-top: 0.5rem; color: var(--warning);">⚠️ 使用真实资金交易</div>
+                        <div>📊 使用 Moomoo 实时市场数据</div>
+                        <div>⏰ 从当前时间开始交易</div>
+                        <div>🔄 持续运行直到手动停止</div>
+                        <div style="color: var(--danger);">❗ 请确保已充分测试策略</div>
+                    `;
+                }
+                
+                if (realtimeConfigDesc) {
+                    const today = new Date().toISOString().split('T')[0];
+                    realtimeConfigDesc.innerHTML = `
+                        <div>📅 开始日期: <strong>${today}</strong> (今天)</div>
+                        <div style="margin-top: 0.5rem;">🔄 持续运行，无结束日期</div>
+                        <div style="margin-top: 0.5rem; color: var(--warning);">⚠️ 将使用真实账户进行交易，请谨慎操作</div>
+                        <div style="margin-top: 0.5rem; color: var(--danger);">❗ 确保已设置风险控制参数</div>
+                    `;
+                }
+            }
+            
+            // Update asset mode description (if exists)
+            if (assetModeDescText) {
+                assetModeDescText.innerHTML = modeDesc;
+            }
+            
+            // Update button hint
+            if (buttonHint) {
+                buttonHint.textContent = btnHint;
             }
         }
     }
@@ -1004,13 +1231,20 @@ class StrategyDetail {
     
     // Run strategy in specific mode
     async runStrategy(mode) {
-        // Special confirmation for real trading
+        // Get current date for simulate/real modes
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Special confirmation for each mode
         if (mode === 'real') {
             const confirmed = confirm(
                 '⚠️ 确定要启动实盘交易吗？\n\n' +
-                '这将使用真实资金并执行真实交易。\n\n' +
+                '重要信息：\n' +
+                '• 将使用真实资金执行交易\n' +
+                `• 从当前时间开始交易（${today}）\n` +
+                '• 持续运行直到手动停止\n' +
+                '• 使用 Moomoo 实时市场数据\n\n' +
                 '请确保：\n' +
-                '1. 已充分测试策略\n' +
+                '1. 已充分测试策略（回测 + 模拟盘）\n' +
                 '2. 已配置风险控制参数\n' +
                 '3. 已准备好承担交易风险\n\n' +
                 '是否继续？'
@@ -1020,20 +1254,44 @@ class StrategyDetail {
             }
         } else if (mode === 'simulate') {
             const confirmed = confirm(
-                '确定要启动模拟盘交易吗？\n\n' +
-                '这将使用实时市场数据进行模拟交易。'
+                '🎯 确定要启动模拟盘交易吗？\n\n' +
+                '运行说明：\n' +
+                `• 从当前时间开始交易（${today}）\n` +
+                '• 使用 Moomoo 实时市场数据\n' +
+                '• 模拟账户交易，无真实资金\n' +
+                '• 持续运行直到手动停止\n\n' +
+                '是否继续？'
             );
             if (!confirmed) {
                 return;
             }
         } else {
+            // Get date range from asset page for backtest
+            const startDate = document.getElementById('assetStartDate')?.value || '未设置';
+            const endDate = document.getElementById('assetEndDate')?.value || '未设置';
+            
+            // Validate dates are set
+            if (startDate === '未设置' || endDate === '未设置' || !startDate || !endDate) {
+                alert('❌ 请先设置回测日期范围');
+                document.getElementById('assetStartDate')?.focus();
+                return;
+            }
+            
             const confirmed = confirm(
-                '确定要启动回测吗？\n\n' +
-                '这将使用历史数据运行策略回测。'
+                '📊 确定要启动回测吗？\n\n' +
+                '回测设置：\n' +
+                `• 日期范围：${startDate} 至 ${endDate}\n` +
+                '• 使用历史数据 (merged.jsonl)\n' +
+                '• 处理完所有交易日后自动结束\n' +
+                '• 无资金风险\n\n' +
+                '是否继续？'
             );
             if (!confirmed) {
                 return;
             }
+            
+            // Save the dates to config before running
+            await this.saveBacktestDates(startDate, endDate);
         }
         
         try {
@@ -1187,9 +1445,33 @@ class StrategyDetail {
             statusText.textContent = `${modeText}运行中...`;
             statusMessage.textContent = status.message || '策略正在运行中...';
             
+            // Display actual progress if available
             if (progressFill) {
-                progressFill.style.width = '60%';
-                progressFill.style.animation = 'pulse 2s infinite';
+                const progress = status.progress || 0;
+                progressFill.style.width = `${progress}%`;
+                
+                // Add animation only if progress is not complete
+                if (progress < 100) {
+                    progressFill.style.animation = 'pulse 2s infinite';
+                } else {
+                    progressFill.style.animation = 'none';
+                }
+                
+                // Update progress text if element exists
+                const progressText = statusDisplay.querySelector('.progress-text');
+                if (progressText) {
+                    progressText.textContent = `${progress}%`;
+                } else if (statusMessage) {
+                    // Add progress info to message
+                    let msg = status.message || '策略正在运行中...';
+                    if (status.current_date) {
+                        msg += ` 当前日期: ${status.current_date}`;
+                    }
+                    if (status.processed_dates && status.total_dates) {
+                        msg += ` (${status.processed_dates}/${status.total_dates})`;
+                    }
+                    statusMessage.textContent = msg;
+                }
             }
             
             if (stopBtn) {
@@ -1240,6 +1522,30 @@ class StrategyDetail {
                     container.style.display = 'none';
                 }
             }, 3000);
+        } else if (status.status === 'stopped') {
+            // Stopped state with partial progress
+            statusIcon.textContent = '⏸️';
+            statusText.textContent = `${modeText}已停止`;
+            statusMessage.textContent = status.message || '策略已停止';
+            
+            if (progressFill && status.progress) {
+                progressFill.style.width = `${status.progress}%`;
+                progressFill.style.animation = 'none';
+                progressFill.style.background = 'var(--warning)';
+            }
+            
+            // Show progress details in message
+            if (statusMessage && status.progress > 0) {
+                let msg = status.message || '策略已停止';
+                if (status.current_date) {
+                    msg += ` 最后处理日期: ${status.current_date}`;
+                }
+                statusMessage.textContent = msg;
+            }
+            
+            if (stopBtn) {
+                stopBtn.style.display = 'none';
+            }
         } else if (status.status === 'failed') {
             // Failed state
             statusIcon.textContent = '❌';
@@ -1313,6 +1619,95 @@ class StrategyDetail {
         } catch (error) {
             console.error('Error restarting service:', error);
             alert('❌ 重启服务失败：' + error.message);
+        }
+    }
+    
+    // Load available data range for asset page
+    async loadAvailableDataRangeForAsset() {
+        try {
+            const response = await fetch(`${this.apiBase}/api/data/available-range`);
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const rangeSpan = document.getElementById('assetAvailableRange');
+            
+            if (rangeSpan) {
+                if (data.available) {
+                    rangeSpan.textContent = `${data.start_date} 至 ${data.end_date}`;
+                    
+                    // Set min/max attributes on date inputs
+                    const startInput = document.getElementById('assetStartDate');
+                    const endInput = document.getElementById('assetEndDate');
+                    
+                    if (startInput && endInput) {
+                        startInput.min = data.start_date;
+                        startInput.max = data.end_date;
+                        endInput.min = data.start_date;
+                        endInput.max = data.end_date;
+                    }
+                } else {
+                    rangeSpan.textContent = '无本地数据（将自动从 API 获取）';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading available data range:', error);
+        }
+    }
+    
+    // Load saved backtest dates for asset page
+    async loadBacktestDatesForAsset() {
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/config/backtest`);
+            
+            if (response.ok) {
+                const data = await response.json();
+                const config = data.config || data;
+                
+                if (config && config.date_range) {
+                    const startInput = document.getElementById('assetStartDate');
+                    const endInput = document.getElementById('assetEndDate');
+                    
+                    if (startInput) startInput.value = config.date_range.init_date || '';
+                    if (endInput) endInput.value = config.date_range.end_date || '';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading backtest dates:', error);
+        }
+    }
+    
+    // Save backtest dates before running
+    async saveBacktestDates(startDate, endDate) {
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/config/backtest`);
+            let config = {};
+            
+            if (response.ok) {
+                const data = await response.json();
+                config = data.config || data || {};
+            }
+            
+            // Update date range
+            config.date_range = {
+                init_date: startDate,
+                end_date: endDate
+            };
+            
+            // Save the updated config
+            const saveResponse = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/config/backtest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            
+            if (!saveResponse.ok) {
+                throw new Error('Failed to save backtest dates');
+            }
+            
+            console.log('✅ Backtest dates saved successfully');
+        } catch (error) {
+            console.error('Error saving backtest dates:', error);
+            // Continue even if save fails, as the dates will be used directly
         }
     }
 }

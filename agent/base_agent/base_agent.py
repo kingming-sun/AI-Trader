@@ -374,19 +374,37 @@ class BaseAgent:
         
         # Check if new dates need to be processed
         max_date_obj = datetime.strptime(max_date, "%Y-%m-%d")
+        init_date_obj = datetime.strptime(init_date, "%Y-%m-%d")
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
         
-        if end_date_obj <= max_date_obj:
+        # Determine start date: respect init_date, but also allow resuming
+        # If max_date is before init_date, start from init_date
+        # If max_date is on or after init_date, start from the day after max_date
+        if max_date_obj < init_date_obj:
+            start_date_obj = init_date_obj
+            print(f"📅 Last processed date ({max_date}) is before init_date ({init_date}), starting from {init_date}")
+        else:
+            start_date_obj = max_date_obj + timedelta(days=1)
+            print(f"📅 Resuming from {start_date_obj.strftime('%Y-%m-%d')} (last processed: {max_date})")
+        
+        # Ensure we don't exceed end_date
+        if end_date_obj < start_date_obj:
+            print(f"ℹ️  All dates in range [{init_date}, {end_date}] have been processed (last processed: {max_date})")
             return []
         
-        # Generate trading date list
+        # Generate trading date list within the configured range
         trading_dates = []
-        current_date = max_date_obj + timedelta(days=1)
+        current_date = start_date_obj
         
         while current_date <= end_date_obj:
-            if current_date.weekday() < 5:  # Weekdays
+            if current_date.weekday() < 5:  # Weekdays only
                 trading_dates.append(current_date.strftime("%Y-%m-%d"))
             current_date += timedelta(days=1)
+        
+        if trading_dates:
+            print(f"📅 Will process dates from {trading_dates[0]} to {trading_dates[-1]} (total: {len(trading_dates)} days)")
+        else:
+            print(f"ℹ️  No trading days in range [{start_date_obj.strftime('%Y-%m-%d')}, {end_date}]")
         
         return trading_dates
     

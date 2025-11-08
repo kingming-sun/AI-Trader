@@ -242,12 +242,42 @@ async def main(config_path=None):
                 
                 # Generate result files for the new architecture
                 print("📝 Generating result files...")
+                print(f"📂 Using log_path: {log_path}")
                 from tools.result_generator import generate_result_files
+                from pathlib import Path
                 try:
-                    generate_result_files(log_path, initial_cash)
-                    print("✅ Result files generated successfully")
+                    # Ensure log_path is absolute
+                    log_path_abs = Path(log_path).resolve()
+                    print(f"📂 Absolute log_path: {log_path_abs}")
+                    
+                    # Check if position file exists
+                    position_file = log_path_abs / "position" / "position.jsonl"
+                    if not position_file.exists():
+                        print(f"⚠️  Position file not found: {position_file}")
+                        print(f"⚠️  Cannot generate result files without position data")
+                    else:
+                        generate_result_files(str(log_path_abs), initial_cash)
+                        print("✅ Result files generated successfully")
+                        
+                        # Verify files were created
+                        result_files = [
+                            log_path_abs / "asset_evolution.json",
+                            log_path_abs / "portfolio.json",
+                            log_path_abs / "trades.json"
+                        ]
+                        for result_file in result_files:
+                            if result_file.exists():
+                                print(f"   ✅ Verified: {result_file}")
+                            else:
+                                print(f"   ⚠️  Missing: {result_file}")
                 except Exception as e:
-                    print(f"⚠️  Failed to generate result files: {e}")
+                    import traceback
+                    error_msg = f"❌ Failed to generate result files: {e}"
+                    print(error_msg)
+                    print(f"📋 Error details:")
+                    traceback.print_exc()
+                    # Don't raise here - let the process complete even if result generation fails
+                    # The frontend will detect missing results and show appropriate error
                 
             except Exception as e:
                 print(f"❌ Error processing model {model_name} ({signature}): {str(e)}")

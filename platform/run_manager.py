@@ -144,6 +144,11 @@ class RunManager:
                 "status": "running"
             }, f, indent=2)
         
+        # Clean up old progress file if exists
+        progress_file = self.project_root / "logs" / f"{strategy_id}_{mode}_progress.json"
+        if progress_file.exists():
+            progress_file.unlink()
+        
         return {
             "strategy_id": strategy_id,
             "mode": mode,
@@ -265,17 +270,21 @@ class RunManager:
                     # Check if it's actually our main.py process
                     cmdline = process.cmdline()
                     if any("main.py" in str(cmd) for cmd in cmdline):
-                        # Try to get latest log file to show progress
+                        # Try to get detailed progress information
                         data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
-                        latest_log = self._get_latest_log_entry(data_path)
+                        progress_info = self._get_progress_info(strategy_id, mode, data_path)
                         
                         return {
                             "is_running": True,
                             "status": "running",
                             "process_id": process_id,
                             "start_time": process_info.get("start_time"),
-                            "latest_log": latest_log,
-                            "message": "策略正在运行中..."
+                            "progress": progress_info.get("progress", 0),
+                            "current_date": progress_info.get("current_date"),
+                            "total_dates": progress_info.get("total_dates", 0),
+                            "processed_dates": progress_info.get("processed_dates", 0),
+                            "latest_log": progress_info.get("latest_log"),
+                            "message": f"策略正在运行中... ({progress_info.get('progress', 0)}%)"
                         }
             except Exception as e:
                 # Handle psutil exceptions (NoSuchProcess, AccessDenied, etc.)
@@ -287,20 +296,40 @@ class RunManager:
                 else:
                     pass
             
-            # Process is not running, check if results exist
+            # Process is not running, check progress and results
+            data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
+            progress_info = self._get_progress_info(strategy_id, mode, data_path)
             results = self.get_run_results(strategy_id, mode)
+            
             if results:
                 return {
                     "is_running": False,
                     "status": "completed",
                     "message": "策略运行已完成",
-                    "has_results": True
+                    "has_results": True,
+                    "progress": 100,
+                    "current_date": progress_info.get("current_date"),
+                    "total_dates": progress_info.get("total_dates", 0),
+                    "processed_dates": progress_info.get("processed_dates", 0)
+                }
+            elif progress_info.get("progress", 0) > 0:
+                # Has partial progress but stopped
+                return {
+                    "is_running": False,
+                    "status": "stopped",
+                    "message": f"策略已停止 (进度: {progress_info.get('progress', 0)}%)",
+                    "progress": progress_info.get("progress", 0),
+                    "current_date": progress_info.get("current_date"),
+                    "total_dates": progress_info.get("total_dates", 0),
+                    "processed_dates": progress_info.get("processed_dates", 0),
+                    "latest_log": progress_info.get("latest_log")
                 }
             else:
                 return {
                     "is_running": False,
                     "status": "failed",
-                    "message": "策略运行已结束，但未生成结果"
+                    "message": "策略运行已结束，但未生成结果",
+                    "progress": 0
                 }
                 
         except Exception as e:
@@ -308,6 +337,83 @@ class RunManager:
                 "is_running": False,
                 "status": "error",
                 "message": f"检查状态时出错: {str(e)}"
+            }
+    
+    def _get_progress_info(self, strategy_id: str, mode: str, data_path: Path) -> Dict:
+        """Get detailed progress information from logs and position data"""
+        try:
+            progress_info = {
+                "progress": 0,
+                "current_date": None,
+                "total_dates": 0,
+                "processed_dates": 0,
+                "latest_log": None
+            }
+            
+            # Check progress file first (persistent storage)
+            progress_file = self.project_root / "logs" / f"{strategy_id}_{mode}_progress.json"
+            if progress_file.exists():
+                try:
+                    with open(progress_file, 'r', encoding='utf-8') as f:
+                        saved_progress = json.load(f)
+                        progress_info.update(saved_progress)
+                except:
+                    pass
+            
+            # Try to get progress from config and position data
+            config_file = self.project_root / "configs" / f"runtime_{strategy_id}_{mode}.json"
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    date_range = config.get("date_range", {})
+                    
+                    if date_range:
+                        from datetime import datetime, timedelta
+                        start_date = datetime.strptime(date_range.get("init_date", ""), "%Y-%m-%d")
+                        end_date = datetime.strptime(date_range.get("end_date", ""), "%Y-%m-%d")
+                        
+                        # Count trading days (exclude weekends)
+                        current = start_date
+                        total_days = 0
+                        while current <= end_date:
+                            if current.weekday() < 5:  # Monday = 0, Friday = 4
+                                total_days += 1
+                            current += timedelta(days=1)
+                        
+                        progress_info["total_dates"] = total_days
+                        
+                        # Check position file for processed dates
+                        position_file = data_path / "position" / "position.jsonl"
+                        if position_file.exists():
+                            with open(position_file, 'r', encoding='utf-8') as f:
+                                lines = f.readlines()
+                                progress_info["processed_dates"] = len(lines)
+                                
+                                if lines:
+                                    last_position = json.loads(lines[-1])
+                                    progress_info["current_date"] = last_position.get("date")
+                        
+                        # Calculate progress
+                        if progress_info["total_dates"] > 0:
+                            progress_info["progress"] = int((progress_info["processed_dates"] / progress_info["total_dates"]) * 100)
+            
+            # Get latest log entry
+            progress_info["latest_log"] = self._get_latest_log_entry(data_path)
+            
+            # Save progress for persistence
+            with open(progress_file, 'w', encoding='utf-8') as f:
+                json.dump(progress_info, f, indent=2)
+            
+            return progress_info
+            
+        except Exception as e:
+            print(f"Error getting progress info: {e}")
+            return {
+                "progress": 0,
+                "current_date": None,
+                "total_dates": 0,
+                "processed_dates": 0,
+                "latest_log": None
             }
     
     def _get_latest_log_entry(self, data_path: Path) -> Optional[str]:

@@ -6,7 +6,7 @@
   "status": "backtest",
   "agent_type": "BaseAgent",
   "date_range": {
-    "init_date": "2025-10-20",
+    "init_date": "2025-10-27",
     "end_date": "2025-10-27"
   },
   "models": [
@@ -26,5 +26,5 @@
   "log_config": {
     "log_path": "./data/strategies/strategy_20251104_141923"
   },
-  "updated_at": "2025-11-04T17:39:42.300023"
+  "updated_at": "2025-11-06T10:13:29.362854"
 }

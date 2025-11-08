@@ -334,13 +334,13 @@
         
         <!-- Tab Navigation -->
         <div class="tab-nav">
-            <button class="tab-btn active" data-tab="config">配置管理</button>
-            <button class="tab-btn" data-tab="asset">资产演变</button>
+            <button class="tab-btn" data-tab="config">配置管理</button>
+            <button class="tab-btn active" data-tab="asset">资产演变</button>
             <button class="tab-btn" data-tab="portfolio">投资组合分析</button>
         </div>
         
         <!-- Tab Contents -->
-        <div id="config-tab" class="tab-content active">
+        <div id="config-tab" class="tab-content">
             <!-- Mode Selector for Config -->
             <div class="mode-selector">
                 <button class="mode-btn backtest active" data-mode="backtest">回测配置</button>
@@ -378,31 +378,6 @@
                 </div>
             </section>
             
-            <section class="config-section" id="dateRangeSection">
-                <h3>📅 交易日期范围</h3>
-                <div class="config-grid">
-                    <div class="config-item">
-                        <label>开始日期</label>
-                        <input type="date" id="startDate">
-                    </div>
-                    <div class="config-item">
-                        <label>结束日期</label>
-                        <input type="date" id="endDate">
-                    </div>
-                </div>
-                <div id="dataAvailabilityHint" style="margin-top: 1rem; padding: 0.75rem; background: var(--secondary-bg); border-radius: 6px; display: none;">
-                    <div style="color: var(--accent-cyan); font-weight: 600; margin-bottom: 0.5rem;">📁 数据源说明</div>
-                    <div id="availableRangeText" style="color: var(--text-primary);">--</div>
-                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(0, 212, 255, 0.1); border-radius: 4px; border: 1px solid rgba(0, 212, 255, 0.3);">
-                        <div style="color: var(--accent-cyan); font-size: 0.9rem;">
-                            ✨ 智能数据获取：系统优先使用本地数据，如果缺失会自动从 Alpha Vantage API 获取
-                        </div>
-                    </div>
-                </div>
-                <p class="mode-hint" style="display: none; color: var(--text-muted); margin-top: 1rem; padding: 0.75rem; background: var(--secondary-bg); border-radius: 6px;">
-                    ℹ️ 实时运行，无需设置日期范围
-                </p>
-            </section>
             
             <div class="config-actions">
                 <button class="btn-secondary" id="resetConfigBtn">重置</button>
@@ -419,11 +394,51 @@
             </div>
         </div>
         
-        <div id="asset-tab" class="tab-content">
+        <div id="asset-tab" class="tab-content active">
             <div class="mode-selector">
                 <button class="mode-btn backtest active" data-mode="backtest">回测</button>
                 <button class="mode-btn simulate" data-mode="simulate">模拟盘</button>
                 <button class="mode-btn real" data-mode="real">实盘</button>
+            </div>
+            
+            <!-- 模式说明 -->
+            <div id="modeDescription" style="margin: 1.5rem 0; padding: 1rem; background: var(--secondary-bg); border-radius: 8px; border-left: 4px solid var(--accent-blue);">
+                <div style="color: var(--text-primary); font-size: 0.875rem; line-height: 1.6;">
+                    <div id="modeDescText">
+                        <!-- Content will be set by JavaScript based on mode -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 回测日期配置 (仅在回测模式显示) -->
+            <div id="backtestDateConfig" style="display: none; margin: 1.5rem 0; padding: 1rem; background: var(--secondary-bg); border-radius: 8px;">
+                <h4 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📅 回测日期范围</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">开始日期</label>
+                        <input type="date" id="assetStartDate" style="width: 100%; padding: 0.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">结束日期</label>
+                        <input type="date" id="assetEndDate" style="width: 100%; padding: 0.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    </div>
+                </div>
+                <div id="assetDataHint" style="margin-top: 1rem; padding: 0.75rem; background: rgba(0, 212, 255, 0.1); border-radius: 6px; border: 1px solid rgba(0, 212, 255, 0.3);">
+                    <div style="color: var(--accent-cyan); font-size: 0.875rem;">
+                        📁 数据可用范围: <span id="assetAvailableRange">加载中...</span>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem;">
+                        ✨ 系统优先使用本地数据，缺失部分将自动从 API 获取
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 实时交易提示 (仅在模拟盘/实盘模式显示) -->
+            <div id="realtimeConfig" style="display: none; margin: 1.5rem 0; padding: 1rem; background: var(--secondary-bg); border-radius: 8px; border-left: 4px solid var(--accent-cyan);">
+                <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">⏰ 交易时间</h4>
+                <div id="realtimeConfigDesc" style="color: var(--text-secondary); font-size: 0.875rem; line-height: 1.5;">
+                    <!-- Content will be set by JavaScript based on mode -->
+                </div>
             </div>
             
             <div class="config-actions" style="margin: 1.5rem 0;">
@@ -431,11 +446,14 @@
                     🚀 开始回测
                 </button>
                 <button class="btn-warning" id="runSimulateBtn" style="display: none;">
-                    🎯 开始模拟
+                    🎯 开始模拟盘
                 </button>
                 <button class="btn-danger" id="runRealBtn" style="display: none;">
-                    ⚡ 开始实盘
+                    ⚡ 开始实盘交易
                 </button>
+                <div id="buttonHint" style="margin-top: 0.5rem; color: var(--text-secondary); font-size: 0.875rem; text-align: center;">
+                    <!-- Hint text will be set by JavaScript -->
+                </div>
             </div>
             
             <!-- 运行状态和进度显示 -->
