@@ -163,6 +163,24 @@
             background: var(--card-bg);
             border-color: var(--accent-blue);
         }
+        
+        .btn-primary {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-cyan);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -231,7 +249,7 @@
         <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
     </footer>
 
-    <script src="assets/js/strategy-manager.js"></script>
+    <script src="assets/js/strategy-manager.js?v=2"></script>
 </body>
 </html>
 

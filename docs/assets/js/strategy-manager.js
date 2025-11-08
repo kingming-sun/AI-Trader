@@ -139,9 +139,6 @@ async function loadStrategies() {
             </div>
             <div class="strategy-actions">
                 <button class="btn-small btn-edit" onclick="editStrategy('${strategy.strategy_id}')">查看详情</button>
-                <button class="btn-small btn-run" onclick="runStrategy('${strategy.strategy_id}', 'backtest')">回测</button>
-                <button class="btn-small btn-run" onclick="runStrategy('${strategy.strategy_id}', 'simulate')">模拟</button>
-                <button class="btn-small btn-run" style="background: var(--danger);" onclick="runStrategy('${strategy.strategy_id}', 'real')">实盘</button>
                 <button class="btn-small btn-delete" style="background: var(--danger); margin-left: auto;" onclick="deleteStrategy('${strategy.strategy_id}', '${strategy.strategy_name}')">删除</button>
             </div>
         </div>
