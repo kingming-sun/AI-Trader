@@ -5,5 +5,40 @@
     "cash": 10000,
     "stock_value": 0,
     "return_rate": 0.0
+  },
+  {
+    "date": "2025-06-06",
+    "total_value": 10000,
+    "cash": 10000,
+    "stock_value": 0,
+    "return_rate": 0.0
+  },
+  {
+    "date": "2025-06-09",
+    "total_value": 10000,
+    "cash": 10000,
+    "stock_value": 0,
+    "return_rate": 0.0
+  },
+  {
+    "date": "2025-06-10",
+    "total_value": 10000,
+    "cash": 10000,
+    "stock_value": 0,
+    "return_rate": 0.0
+  },
+  {
+    "date": "2025-06-11",
+    "total_value": 10000,
+    "cash": 10000,
+    "stock_value": 0,
+    "return_rate": 0.0
+  },
+  {
+    "date": "2025-06-07",
+    "total_value": 10000,
+    "cash": 10000,
+    "stock_value": 0,
+    "return_rate": 0.0
   }
 ]

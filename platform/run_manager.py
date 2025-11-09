@@ -222,6 +222,43 @@ class RunManager:
                             "start_date": asset_data[0].get("date"),
                             "end_date": asset_data[-1].get("date")
                         }
+            else:
+                # If asset_evolution.json doesn't exist yet, try to generate it from position data
+                # This allows real-time updates during backtest
+                position_file = data_path / "position" / "position.jsonl"
+                if position_file.exists():
+                    try:
+                        from tools.result_generator import load_position_data, generate_asset_evolution
+                        # Get initial_cash from config if available
+                        initial_cash = 10000.0
+                        try:
+                            config_file = self.project_root / "configs" / f"runtime_{strategy_id}_{mode}.json"
+                            if config_file.exists():
+                                with open(config_file, 'r', encoding='utf-8') as f:
+                                    config = json.load(f)
+                                    initial_cash = config.get("agent_config", {}).get("initial_cash", 10000.0)
+                        except:
+                            pass
+                        
+                        positions = load_position_data(str(data_path))
+                        if positions:
+                            asset_data = generate_asset_evolution(positions, initial_cash)
+                            results["asset_evolution"] = asset_data
+                            
+                            # Calculate metrics
+                            if asset_data and len(asset_data) > 0:
+                                initial_value = asset_data[0].get("total_value", initial_cash)
+                                current_value = asset_data[-1].get("total_value", initial_value)
+                                results["metrics"] = {
+                                    "initial_value": initial_value,
+                                    "current_value": current_value,
+                                    "total_return": ((current_value - initial_value) / initial_value) * 100,
+                                    "num_trades": len(asset_data) - 1,
+                                    "start_date": asset_data[0].get("date"),
+                                    "end_date": asset_data[-1].get("date")
+                                }
+                    except Exception as e:
+                        print(f"⚠️  Failed to generate asset evolution from position data: {e}")
             
             # Load portfolio data
             portfolio_file = data_path / "portfolio.json"

@@ -6,7 +6,7 @@
     "total_trades": 0,
     "date_range": {
       "start": "2025-10-20",
-      "end": "2025-10-20"
+      "end": "2025-06-07"
     }
   },
   "asset_evolution": [
@@ -16,10 +16,45 @@
       "cash": 10000,
       "stock_value": 0,
       "return_rate": 0.0
+    },
+    {
+      "date": "2025-06-06",
+      "total_value": 10000,
+      "cash": 10000,
+      "stock_value": 0,
+      "return_rate": 0.0
+    },
+    {
+      "date": "2025-06-09",
+      "total_value": 10000,
+      "cash": 10000,
+      "stock_value": 0,
+      "return_rate": 0.0
+    },
+    {
+      "date": "2025-06-10",
+      "total_value": 10000,
+      "cash": 10000,
+      "stock_value": 0,
+      "return_rate": 0.0
+    },
+    {
+      "date": "2025-06-11",
+      "total_value": 10000,
+      "cash": 10000,
+      "stock_value": 0,
+      "return_rate": 0.0
+    },
+    {
+      "date": "2025-06-07",
+      "total_value": 10000,
+      "cash": 10000,
+      "stock_value": 0,
+      "return_rate": 0.0
     }
   ],
   "portfolio": {
-    "date": "2025-10-20",
+    "date": "2025-06-07",
     "holdings": [],
     "cash": 10000,
     "total_value": 10000,

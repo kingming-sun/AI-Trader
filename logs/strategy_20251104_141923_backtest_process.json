@@ -1,8 +1,8 @@
 {
   "strategy_id": "strategy_20251104_141923",
   "mode": "backtest",
-  "process_id": 19044,
+  "process_id": 37733,
   "config_file": "/Users/qiming.sun/AI-Trader/configs/runtime_strategy_20251104_141923_backtest.json",
-  "start_time": 1762596181.937844,
+  "start_time": 1762695148.73728,
   "status": "running"
 }

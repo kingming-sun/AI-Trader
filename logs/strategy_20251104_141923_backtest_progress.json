@@ -1,7 +1,7 @@
 {
-  "progress": 0,
-  "current_date": null,
-  "total_dates": 2,
-  "processed_dates": 0,
-  "latest_log": "\ud83d\udd04 Step 1/30"
+  "progress": 33,
+  "current_date": "2025-06-11",
+  "total_dates": 12,
+  "processed_dates": 4,
+  "latest_log": "Error details: Error calling tool 'buy': local variable 'get_config_value' referenced before assignment"
 }

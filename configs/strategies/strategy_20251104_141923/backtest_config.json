@@ -6,8 +6,8 @@
   "status": "backtest",
   "agent_type": "BaseAgent",
   "date_range": {
-    "init_date": "2025-06-05",
-    "end_date": "2025-06-06"
+    "init_date": "2025-06-07",
+    "end_date": "2025-06-24"
   },
   "models": [
     {

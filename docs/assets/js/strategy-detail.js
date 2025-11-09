@@ -16,6 +16,7 @@ class StrategyDetail {
         this.allocationChart = null;
         this.statusCheckInterval = null; // 状态检查定时器
         this.isRunning = false; // 是否正在运行
+        this.lastAssetUpdate = 0; // 上次资产数据更新时间
     }
     
     // Parse URL hash to get tab and mode state
@@ -641,9 +642,51 @@ class StrategyDetail {
                 return;
             }
             
-            // Render chart with real data
+            // Render chart with real data (filtered by date range for backtest mode)
             if (results.asset_evolution) {
-                this.renderAssetChart(results.asset_evolution);
+                let filteredData = results.asset_evolution;
+                
+                // For backtest mode, filter by configured date range
+                if (this.currentMode === 'backtest') {
+                    try {
+                        const configResponse = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/config/backtest`);
+                        if (configResponse.ok) {
+                            const configData = await configResponse.json();
+                            const config = configData.config || configData;
+                            
+                            if (config && config.date_range && config.date_range.init_date && config.date_range.end_date) {
+                                const startDate = config.date_range.init_date;
+                                const endDate = config.date_range.end_date;
+                                
+                                // Filter data within date range (strict filtering)
+                                filteredData = results.asset_evolution.filter(point => {
+                                    const pointDate = point.date || point.timestamp || '';
+                                    // Only include dates strictly within the backtest range
+                                    return pointDate >= startDate && pointDate <= endDate;
+                                });
+                                
+                                // If no data in range, show warning
+                                if (filteredData.length === 0 && results.asset_evolution.length > 0) {
+                                    console.warn(`⚠️  No asset data found in backtest date range (${startDate} to ${endDate})`);
+                                    console.warn(`   Available data dates: ${results.asset_evolution.map(p => p.date || p.timestamp).join(', ')}`);
+                                } else {
+                                    console.log(`📅 Filtered asset data: ${results.asset_evolution.length} -> ${filteredData.length} (range: ${startDate} to ${endDate})`);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Failed to load backtest config for filtering:', error);
+                        // Continue with unfiltered data
+                    }
+                }
+                
+                // Only render if we have data
+                if (filteredData && filteredData.length > 0) {
+                    this.renderAssetChart(filteredData);
+                } else {
+                    console.warn('No asset data to render');
+                    // Show empty state or placeholder
+                }
             }
         } catch (error) {
             console.error('Error loading asset data:', error);
@@ -725,7 +768,12 @@ class StrategyDetail {
             // Render logs
             container.innerHTML = logs.map((log, index) => {
                 const timestamp = log.timestamp || '';
-                const messages = log.new_messages || [];
+                // Handle both array and object formats for backward compatibility
+                let messages = log.new_messages || [];
+                if (!Array.isArray(messages)) {
+                    // If it's an object, convert to array
+                    messages = [messages];
+                }
                 const signature = log.signature || '';
                 
                 return `
@@ -896,9 +944,16 @@ class StrategyDetail {
         let values = [];
         
         if (assetData && assetData.length > 0) {
-            // Use real data
-            dates = assetData.map(point => point.date || point.timestamp || '');
-            values = assetData.map(point => point.total_value || point.value || 0);
+            // Sort data by date to ensure correct chronological order
+            const sortedData = [...assetData].sort((a, b) => {
+                const dateA = a.date || a.timestamp || '';
+                const dateB = b.date || b.timestamp || '';
+                return dateA.localeCompare(dateB);
+            });
+            
+            // Use sorted real data
+            dates = sortedData.map(point => point.date || point.timestamp || '');
+            values = sortedData.map(point => point.total_value || point.value || 0);
         } else {
             // Generate sample data as fallback
             const baseValue = 10000;
@@ -1420,6 +1475,15 @@ class StrategyDetail {
             
             const status = data.status;
             this.updateRunStatusDisplay(status, mode);
+            
+            // If running, update asset data in real-time (every 5 status checks = ~10 seconds)
+            if (status.is_running) {
+                // Update asset chart periodically during backtest
+                if (!this.lastAssetUpdate || Date.now() - this.lastAssetUpdate > 10000) {
+                    this.lastAssetUpdate = Date.now();
+                    this.loadAssetData();
+                }
+            }
             
             // If not running and has results, stop monitoring and reload data
             if (!status.is_running && status.status === 'completed') {

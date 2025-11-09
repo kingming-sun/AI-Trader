@@ -61,17 +61,32 @@ def generate_asset_evolution(positions: List[Dict[str, Any]], initial_cash: floa
         })
         return asset_evolution
     
+    # Track the last valid position to handle empty positions
+    last_valid_cash = initial_cash
+    last_valid_stock_value = 0
+    
     for i, pos_data in enumerate(positions):
         date = pos_data.get("date", datetime.now().strftime("%Y-%m-%d"))
         # Support both "position" and "positions" field names
         position = pos_data.get("positions", pos_data.get("position", {}))
-        cash = position.get("CASH", initial_cash)
         
-        # Calculate stock value (simplified - using placeholder prices)
-        stock_value = 0
-        for symbol, shares in position.items():
-            if symbol != "CASH" and shares > 0:
-                stock_value += shares * 100  # Placeholder price
+        # Check if position has actual data
+        has_data = position and (position.get("CASH", 0) > 0 or any(v > 0 for k, v in position.items() if k != "CASH"))
+        
+        if has_data:
+            cash = position.get("CASH", last_valid_cash)
+            last_valid_cash = cash
+            
+            # Calculate stock value (simplified - using placeholder prices)
+            stock_value = 0
+            for symbol, shares in position.items():
+                if symbol != "CASH" and shares > 0:
+                    stock_value += shares * 100  # Placeholder price
+            last_valid_stock_value = stock_value
+        else:
+            # Use last valid values if current position is empty
+            cash = last_valid_cash
+            stock_value = last_valid_stock_value
         
         total_value = cash + stock_value
         return_rate = ((total_value - initial_cash) / initial_cash) * 100

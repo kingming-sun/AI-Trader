@@ -226,6 +226,7 @@ def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]
     获取今日开盘时的初始持仓（即文件中上一个交易日代表的持仓）。
     优先从环境变量 DATA_PATH 获取路径，否则使用旧路径结构。
     如果同一日期有多条记录，选择id最大的记录作为初始持仓。
+    如果找不到昨天的记录，则查找今天之前最近的记录（包括初始注册记录）。
     
     Args:
         today_date: 日期字符串，格式 YYYY-MM-DD，代表今天日期。
@@ -250,8 +251,19 @@ def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]
         return {}
     
     yesterday_date = get_yesterday_date(today_date)
+    today_date_obj = datetime.strptime(today_date, "%Y-%m-%d")
     max_id = -1
     latest_positions = {}
+    
+    # Also track the most recent position before today (for fallback)
+    most_recent_date_obj = None
+    most_recent_positions = {}
+    most_recent_id = -1
+    
+    # Track any position with actual data (non-empty positions dict) as ultimate fallback
+    any_valid_position = None
+    any_valid_date = None
+    any_valid_id = -1
   
     with position_file.open("r", encoding="utf-8") as f:
         for line in f:
@@ -259,22 +271,78 @@ def get_today_init_position(today_date: str, modelname: str) -> Dict[str, float]
                 continue
             try:
                 doc = json.loads(line)
-                if doc.get("date") == yesterday_date:
-                    current_id = doc.get("id", 0)
+                record_date = doc.get("date")
+                if not record_date:
+                    continue
+                    
+                record_date_obj = datetime.strptime(record_date, "%Y-%m-%d")
+                current_id = doc.get("id", 0)
+                positions = doc.get("positions", {})
+                
+                # Check if positions dict has actual data (not empty and has CASH or stocks)
+                has_data = positions and (positions.get("CASH", 0) > 0 or any(shares > 0 for symbol, shares in positions.items() if symbol != "CASH"))
+                
+                # First, try to find yesterday's position
+                if record_date == yesterday_date:
                     if current_id > max_id:
                         max_id = current_id
-                        latest_positions = doc.get("positions", {})
-            except Exception:
+                        latest_positions = positions
+                
+                # Also track the most recent position before today (for fallback)
+                if record_date_obj < today_date_obj:
+                    if most_recent_date_obj is None or record_date_obj > most_recent_date_obj:
+                        most_recent_date_obj = record_date_obj
+                        most_recent_id = current_id
+                        most_recent_positions = positions
+                    elif record_date_obj == most_recent_date_obj and current_id > most_recent_id:
+                        most_recent_id = current_id
+                        most_recent_positions = positions
+                
+                # Track any valid position with actual data (ultimate fallback)
+                if has_data:
+                    if any_valid_position is None or record_date_obj > any_valid_date or (record_date_obj == any_valid_date and current_id > any_valid_id):
+                        any_valid_position = positions
+                        any_valid_date = record_date_obj
+                        any_valid_id = current_id
+            except Exception as e:
                 continue
     
-    return latest_positions
+    # If we found yesterday's position, return it (even if empty, it's the correct date)
+    if latest_positions is not None and latest_positions != {}:
+        return latest_positions
+    
+    # If yesterday's position exists but is empty, check if we should use fallback
+    # (This handles the case where yesterday's record exists but positions is empty)
+    if latest_positions == {}:
+        # Yesterday's record exists but is empty, try fallback
+        if most_recent_positions and most_recent_positions != {}:
+            print(f"⚠️  Yesterday's position ({yesterday_date}) is empty, using most recent position from {most_recent_date_obj.strftime('%Y-%m-%d') if most_recent_date_obj else 'unknown'}")
+            return most_recent_positions
+        elif any_valid_position:
+            print(f"⚠️  Yesterday's position ({yesterday_date}) is empty, using valid position from {any_valid_date.strftime('%Y-%m-%d') if any_valid_date else 'unknown'}")
+            return any_valid_position
+    
+    # Otherwise, return the most recent position before today (fallback)
+    if most_recent_positions and most_recent_positions != {}:
+        print(f"⚠️  No position found for yesterday ({yesterday_date}), using most recent position from {most_recent_date_obj.strftime('%Y-%m-%d') if most_recent_date_obj else 'unknown'}")
+        return most_recent_positions
+    
+    # Ultimate fallback: use any valid position with actual data
+    if any_valid_position:
+        print(f"⚠️  No position found for yesterday ({yesterday_date}), using valid position from {any_valid_date.strftime('%Y-%m-%d') if any_valid_date else 'unknown'}")
+        return any_valid_position
+    
+    # If no positions found at all, return empty dict
+    print(f"⚠️  No position records found before {today_date}")
+    return {}
 
 def get_latest_position(today_date: str, modelname: str) -> Dict[str, float]:
     """
     获取最新持仓。
     优先从环境变量 DATA_PATH 获取路径，否则使用旧路径结构。
-    优先选择当天 (today_date) 中 id 最大的记录；
-    若当天无记录，则回退到上一个交易日，选择该日中 id 最大的记录。
+    优先选择当天 (today_date) 中 id 最大的记录（且positions不为空）；
+    若当天无有效记录，则回退到上一个交易日，选择该日中 id 最大的记录。
+    如果都找不到，则查找任何有实际数据的记录作为回退。
 
     Args:
         today_date: 日期字符串，格式 YYYY-MM-DD，代表今天日期。
@@ -299,47 +367,82 @@ def get_latest_position(today_date: str, modelname: str) -> Dict[str, float]:
     if not position_file.exists():
         return {}, -1
     
-    # 先尝试读取当天记录
+    today_date_obj = datetime.strptime(today_date, "%Y-%m-%d")
+    prev_date = get_yesterday_date(today_date)
+    
+    # Track positions from different sources
     max_id_today = -1
     latest_positions_today: Dict[str, float] = {}
     
+    max_id_prev = -1
+    latest_positions_prev: Dict[str, float] = {}
+    
+    # Ultimate fallback: any valid position with actual data
+    any_valid_position = None
+    any_valid_date = None
+    any_valid_id = -1
+    
     with position_file.open("r", encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
             try:
                 doc = json.loads(line)
-                if doc.get("date") == today_date:
-                    current_id = doc.get("id", -1)
+                record_date = doc.get("date")
+                if not record_date:
+                    continue
+                    
+                record_date_obj = datetime.strptime(record_date, "%Y-%m-%d")
+                current_id = doc.get("id", -1)
+                positions = doc.get("positions", {})
+                
+                # Check if positions has actual data
+                has_data = positions and (positions.get("CASH", 0) > 0 or any(v > 0 for k, v in positions.items() if k != "CASH"))
+                
+                # 先尝试读取当天记录（优先选择有数据的）
+                if record_date == today_date:
                     if current_id > max_id_today:
                         max_id_today = current_id
-                        latest_positions_today = doc.get("positions", {})
+                        latest_positions_today = positions
+                
+                # 当天没有记录，则回退到上一个交易日
+                if record_date == prev_date:
+                    if current_id > max_id_prev:
+                        max_id_prev = current_id
+                        latest_positions_prev = positions
+                
+                # Track any valid position with actual data (ultimate fallback)
+                if has_data:
+                    if any_valid_position is None or record_date_obj > any_valid_date or (record_date_obj == any_valid_date and current_id > any_valid_id):
+                        any_valid_position = positions
+                        any_valid_date = record_date_obj
+                        any_valid_id = current_id
             except Exception:
                 continue
     
+    # Return today's position if it has data
+    if latest_positions_today and (latest_positions_today.get("CASH", 0) > 0 or any(v > 0 for k, v in latest_positions_today.items() if k != "CASH")):
+        return latest_positions_today, max_id_today
+    
+    # Return yesterday's position if it has data
+    if latest_positions_prev and (latest_positions_prev.get("CASH", 0) > 0 or any(v > 0 for k, v in latest_positions_prev.items() if k != "CASH")):
+        print(f"⚠️  Today's position ({today_date}) is empty, using yesterday's position from {prev_date}")
+        return latest_positions_prev, max_id_prev
+    
+    # Ultimate fallback: use any valid position
+    if any_valid_position:
+        print(f"⚠️  No valid position found for {today_date} or {prev_date}, using valid position from {any_valid_date.strftime('%Y-%m-%d') if any_valid_date else 'unknown'}")
+        return any_valid_position, any_valid_id
+    
+    # If today's position exists but is empty, return it anyway (for consistency)
     if max_id_today >= 0:
         return latest_positions_today, max_id_today
+    
+    # If yesterday's position exists but is empty, return it anyway
+    if max_id_prev >= 0:
+        return latest_positions_prev, max_id_prev
 
-    # 当天没有记录，则回退到上一个交易日
-    prev_date = get_yesterday_date(today_date)
-    max_id_prev = -1
-    latest_positions_prev: Dict[str, float] = {}
-
-    with position_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                doc = json.loads(line)
-                if doc.get("date") == prev_date:
-                    current_id = doc.get("id", -1)
-                    if current_id > max_id_prev:
-                        max_id_prev = current_id
-                        latest_positions_prev = doc.get("positions", {})
-            except Exception:
-                continue
-
-    return latest_positions_prev, max_id_prev
+    return {}, -1
 
 def add_no_trade_record(today_date: str, modelname: str):
     """

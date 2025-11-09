@@ -286,9 +286,8 @@ class BaseAgent:
                 # Add new messages
                 message.extend(new_messages)
                 
-                # Log messages
-                self._log_message(log_file, new_messages[0])
-                self._log_message(log_file, new_messages[1])
+                # Log messages (ensure we pass a list, not individual items)
+                self._log_message(log_file, new_messages)
                 
             except Exception as e:
                 print(f"❌ Trading session error: {str(e)}")
@@ -320,6 +319,16 @@ class BaseAgent:
             print(f"⚠️ Position file {self.position_file} already exists, skipping registration")
             return
         
+        # Create initial position using init_date
+        self._create_initial_position(self.init_date)
+    
+    def _create_initial_position(self, position_date: str) -> None:
+        """
+        Create initial position record for a specific date
+        
+        Args:
+            position_date: Date for the initial position (usually the backtest start date)
+        """
         # Ensure directory structure exists
         position_dir = os.path.join(self.data_path, "position")
         if not os.path.exists(position_dir):
@@ -330,14 +339,37 @@ class BaseAgent:
         init_position = {symbol: 0 for symbol in self.stock_symbols}
         init_position['CASH'] = self.initial_cash
         
-        with open(self.position_file, "w") as f:  # Use "w" mode to ensure creating new file
+        # Check if a position record already exists for this date
+        position_exists = False
+        if os.path.exists(self.position_file):
+            with open(self.position_file, "r") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        doc = json.loads(line)
+                        if doc.get("date") == position_date:
+                            positions = doc.get("positions", {})
+                            # Check if it has actual data
+                            if positions and (positions.get("CASH", 0) > 0 or any(v > 0 for k, v in positions.items() if k != "CASH")):
+                                position_exists = True
+                                break
+                    except:
+                        continue
+        
+        if position_exists:
+            print(f"ℹ️  Initial position for {position_date} already exists, skipping creation")
+            return
+        
+        # Append to existing file or create new file
+        with open(self.position_file, "a", encoding="utf-8") as f:
             f.write(json.dumps({
-                "date": self.init_date, 
+                "date": position_date, 
                 "id": 0, 
                 "positions": init_position
-            }) + "\n")
+            }, ensure_ascii=False) + "\n")
         
-        print(f"✅ Agent {self.signature} registration completed")
+        print(f"✅ Created initial position for {position_date}")
         print(f"📁 Position file: {self.position_file}")
         print(f"💰 Initial cash: ${self.initial_cash}")
         print(f"📊 Number of stocks: {len(self.stock_symbols)}")
@@ -361,24 +393,60 @@ class BaseAgent:
         end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
         
         if not os.path.exists(self.position_file):
-            self.register_agent()
+            # Create initial position for this backtest
+            self._create_initial_position(init_date)
             max_date = init_date
         else:
+            # Check if we need to create initial position for this backtest date range
+            has_init_position = False
+            with open(self.position_file, "r") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        doc = json.loads(line)
+                        current_date = doc.get('date')
+                        if not current_date:
+                            continue
+                        current_date_obj = datetime.strptime(current_date, "%Y-%m-%d")
+                        
+                        # Check if there's an initial position for this backtest date range
+                        if current_date == init_date:
+                            positions = doc.get("positions", {})
+                            # Check if positions has actual data (CASH > 0 or any stock > 0)
+                            if positions and (positions.get("CASH", 0) > 0 or any(v > 0 for k, v in positions.items() if k != "CASH")):
+                                has_init_position = True
+                                break
+                    except:
+                        continue
+            
+            # If no initial position found for this backtest, create one
+            if not has_init_position:
+                print(f"📅 No initial position found for backtest start date {init_date}, creating new initial position...")
+                self._create_initial_position(init_date)
+            
             # Read existing position file, find latest date within the requested range
             with open(self.position_file, "r") as f:
                 for line in f:
-                    doc = json.loads(line)
-                    current_date = doc['date']
-                    current_date_obj = datetime.strptime(current_date, "%Y-%m-%d")
-                    
-                    # Only consider dates within the requested range
-                    if init_date_obj <= current_date_obj <= end_date_obj:
-                        if max_date is None:
-                            max_date = current_date
-                        else:
-                            max_date_obj = datetime.strptime(max_date, "%Y-%m-%d")
-                            if current_date_obj > max_date_obj:
+                    if not line.strip():
+                        continue
+                    try:
+                        doc = json.loads(line)
+                        current_date = doc.get('date')
+                        if not current_date:
+                            continue
+                        current_date_obj = datetime.strptime(current_date, "%Y-%m-%d")
+                        
+                        # Only consider dates within the requested range
+                        if init_date_obj <= current_date_obj <= end_date_obj:
+                            if max_date is None:
                                 max_date = current_date
+                            else:
+                                max_date_obj = datetime.strptime(max_date, "%Y-%m-%d")
+                                if current_date_obj > max_date_obj:
+                                    max_date = current_date
+                    except:
+                        continue
         
         # If no date found in range, start from init_date
         if max_date is None:
