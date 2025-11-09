@@ -304,12 +304,32 @@ class BaseAgent:
             write_config_value("IF_TRADE", False)
             print("✅ Trading completed")
         else:
-            print("📊 No trading, maintaining positions")
-            try:
-                add_no_trade_record(today_date, self.signature)
-            except NameError as e:
-                print(f"❌ NameError: {e}")
-                raise
+            # No trading occurred, but we still need to record the position for this date
+            # Check if a position record already exists for today
+            position_file = self.position_file
+            has_record_for_today = False
+            
+            if os.path.exists(position_file):
+                try:
+                    with open(position_file, 'r', encoding='utf-8') as f:
+                        lines = [line for line in f if line.strip()]
+                        if lines:
+                            last_record = json.loads(lines[-1])
+                            if last_record.get("date") == today_date:
+                                has_record_for_today = True
+                                print("📊 Position record already exists for today")
+                except Exception as e:
+                    print(f"⚠️  Error reading position file: {e}")
+            
+            if not has_record_for_today:
+                # No record for today, add no_trade record
+                print("📊 No trading, maintaining positions")
+                try:
+                    add_no_trade_record(today_date, self.signature)
+                except Exception as e:
+                    print(f"❌ Failed to add no_trade record: {e}")
+                    raise
+            
             write_config_value("IF_TRADE", False)
     
     def register_agent(self) -> None:
