@@ -66,3 +66,6 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
+# JSON 文件
+*.json
+

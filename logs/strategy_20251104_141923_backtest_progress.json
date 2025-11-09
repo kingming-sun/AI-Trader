@@ -3,5 +3,5 @@
   "current_date": "2025-06-07",
   "total_dates": 12,
   "processed_dates": 1,
-  "latest_log": "For troubleshooting, visit: https://python.langchain.com/docs/troubleshooting/errors/GRAPH_RECURSION_LIMIT"
+  "latest_log": "Error details: Error code: 404"
 }
