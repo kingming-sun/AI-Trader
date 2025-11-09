@@ -76,12 +76,21 @@ class MCPServiceManager:
         try:
             # Start service process
             log_file = self.log_dir / f"{service_id}.log"
+            
+            # Set RUNTIME_ENV_PATH environment variable for MCP services
+            # This ensures MCP services can access runtime_env.json
+            env = os.environ.copy()
+            project_root = Path(__file__).parent.parent
+            runtime_env_path = project_root / "runtime_env.json"
+            env["RUNTIME_ENV_PATH"] = str(runtime_env_path)
+            
             with open(log_file, 'w') as f:
                 process = subprocess.Popen(
                     [sys.executable, script_path],
                     stdout=f,
                     stderr=subprocess.STDOUT,
-                    cwd=os.getcwd()
+                    cwd=os.getcwd(),
+                    env=env
                 )
             
             self.services[service_id] = {

@@ -192,6 +192,12 @@ async def main(config_path=None):
             data_path = os.getenv("DATA_PATH")
             if data_path:
                 write_config_value("DATA_PATH", data_path)
+            
+            # Set RUNTIME_ENV_PATH environment variable to ensure MCP services can access runtime_env.json
+            from pathlib import Path
+            project_root = Path(__file__).parent
+            runtime_env_path = project_root / "runtime_env.json"
+            os.environ["RUNTIME_ENV_PATH"] = str(runtime_env_path)
 
 
             # Get log path configuration

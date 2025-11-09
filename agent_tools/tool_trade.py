@@ -90,7 +90,6 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
             
             # Record to position file
             # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
-            from tools.general_tools import get_config_value
             data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
             if data_path:
                 position_file_path = os.path.join(data_path, "position", "position.jsonl")
@@ -242,7 +241,6 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
             
             # Record to position file
             # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
-            from tools.general_tools import get_config_value
             data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
             if data_path:
                 position_file_path = os.path.join(data_path, "position", "position.jsonl")

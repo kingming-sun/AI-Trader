@@ -17,6 +17,13 @@ class StrategyDetail {
         this.statusCheckInterval = null; // 状态检查定时器
         this.isRunning = false; // 是否正在运行
         this.lastAssetUpdate = 0; // 上次资产数据更新时间
+        this.statusCheckRetries = 0; // 状态检查重试计数
+        this.statusCheckStartTime = 0; // 状态检查开始时间
+        this.maxMonitoringTime = 3600000; // 最大监控时间（1小时）
+        this.statusStuckCount = 0; // 状态卡住计数
+        this.lastStatusLog = null; // 上次状态日志
+        this.progressStuckCount = 0; // 进度卡住计数
+        this.lastProgress = null; // 上次进度值
     }
     
     // Parse URL hash to get tab and mode state
@@ -589,8 +596,13 @@ class StrategyDetail {
             const data = await response.json();
             
             if (!data.has_data || !data.results) {
-                // Show empty state
-                this.showEmptyAssetState();
+                // Check if there's an error message
+                if (data.error) {
+                    this.showErrorState(data.error);
+                } else {
+                    // Show empty state
+                    this.showEmptyAssetState();
+                }
                 return;
             }
             
@@ -860,6 +872,26 @@ class StrategyDetail {
                     <p style="font-size: 1.2rem; margin-bottom: 1rem;">📊 暂无数据</p>
                     <p>该模式尚未运行或还没有生成结果</p>
                     <p style="margin-top: 1rem;">请先运行策略以生成数据</p>
+                </div>
+            `;
+        }
+        
+        // Clear chart
+        if (this.assetChart) {
+            this.assetChart.destroy();
+            this.assetChart = null;
+        }
+    }
+    
+    showErrorState(errorMessage) {
+        const metricsGrid = document.querySelector('#asset-tab .metrics-grid');
+        if (metricsGrid) {
+            metricsGrid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--error-color, #ff6b6b);">
+                    <p style="font-size: 1.2rem; margin-bottom: 1rem;">❌ 回测失败</p>
+                    <p style="margin-bottom: 0.5rem;">错误信息：</p>
+                    <p style="font-family: monospace; background: var(--bg-secondary, #2a2a2a); padding: 1rem; border-radius: 4px; word-break: break-all;">${errorMessage || '未知错误'}</p>
+                    <p style="margin-top: 1rem; color: var(--text-muted);">请检查日志文件或重新运行回测</p>
                 </div>
             `;
         }
@@ -1442,9 +1474,20 @@ class StrategyDetail {
             clearInterval(this.statusCheckInterval);
         }
         
+        // Reset monitoring state
+        this.statusCheckStartTime = Date.now();
+        this.statusCheckRetries = 0;
+        this.maxMonitoringTime = 3600000; // 1 hour max monitoring time
+        
         // Check status every 2 seconds
         this.statusCheckInterval = setInterval(async () => {
             await this.checkRunStatus(mode);
+            
+            // Safety timeout: stop monitoring after 1 hour
+            if (Date.now() - this.statusCheckStartTime > this.maxMonitoringTime) {
+                console.warn('⚠️  Status monitoring timeout (1 hour), stopping...');
+                this.stopStatusMonitoring();
+            }
         }, 2000);
         
         // Initial check
@@ -1485,15 +1528,71 @@ class StrategyDetail {
                 }
             }
             
-            // If not running and has results, stop monitoring and reload data
-            if (!status.is_running && status.status === 'completed') {
-                this.stopStatusMonitoring();
-                setTimeout(() => {
-                    this.loadAssetData();
-                    this.loadAvailableLogDates();
-                }, 1000);
-            } else if (!status.is_running && status.status === 'failed') {
-                this.stopStatusMonitoring();
+            // If not running, stop monitoring
+            if (!status.is_running) {
+                if (status.status === 'completed') {
+                    // Completed successfully, reload data
+                    this.stopStatusMonitoring();
+                    setTimeout(() => {
+                        this.loadAssetData();
+                        this.loadAvailableLogDates();
+                    }, 1000);
+                } else if (status.status === 'failed' || status.status === 'error' || status.status === 'stopped') {
+                    // Failed, error, or stopped, stop monitoring immediately
+                    this.stopStatusMonitoring();
+                } else {
+                    // Process ended but status is unclear, stop monitoring after a delay
+                    // This handles cases where process crashed or was killed
+                    this.statusCheckRetries++;
+                    // If we've checked multiple times and still not running, stop
+                    if (this.statusCheckRetries >= 3) {
+                        console.warn('⚠️  Process stopped but status unclear, stopping monitoring after 3 checks');
+                        this.stopStatusMonitoring();
+                        this.statusCheckRetries = 0;
+                    }
+                }
+            } else {
+                // Reset retry counter when process is running
+                this.statusCheckRetries = 0;
+                
+                // Check if process is stuck (same status for too long)
+                if (status.latest_log && this.lastStatusLog === status.latest_log) {
+                    this.statusStuckCount = (this.statusStuckCount || 0) + 1;
+                    // If same log message for 30 checks (60 seconds), stop monitoring
+                    if (this.statusStuckCount >= 30) {
+                        console.warn(`⚠️  Process seems stuck (same log message for 60 seconds): ${status.latest_log}. Stopping monitoring.`);
+                        this.stopStatusMonitoring();
+                        // Show error message to user
+                        this.updateRunStatusDisplay({
+                            ...status,
+                            is_running: false,
+                            status: 'error',
+                            message: `进程可能已卡住: ${status.latest_log}`
+                        }, mode);
+                    }
+                } else {
+                    this.statusStuckCount = 0;
+                    this.lastStatusLog = status.latest_log;
+                }
+                
+                // Also check if progress hasn't changed for too long (additional safety check)
+                if (status.progress !== undefined && this.lastProgress === status.progress) {
+                    this.progressStuckCount = (this.progressStuckCount || 0) + 1;
+                    // If progress hasn't changed for 60 checks (2 minutes), stop monitoring
+                    if (this.progressStuckCount >= 60) {
+                        console.warn(`⚠️  Process progress hasn't changed for 2 minutes (${status.progress}%). Stopping monitoring.`);
+                        this.stopStatusMonitoring();
+                        this.updateRunStatusDisplay({
+                            ...status,
+                            is_running: false,
+                            status: 'error',
+                            message: `进程进度长时间未更新 (${status.progress}%)`
+                        }, mode);
+                    }
+                } else {
+                    this.progressStuckCount = 0;
+                    this.lastProgress = status.progress;
+                }
             }
             
         } catch (error) {

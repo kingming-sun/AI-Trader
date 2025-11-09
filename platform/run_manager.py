@@ -41,6 +41,60 @@ class RunManager:
         else:
             self.service_manager = None
     
+    def _cleanup_backtest_data(self, data_path: Path) -> None:
+        """
+        Clean up previous backtest data to start fresh
+        
+        Args:
+            data_path: Path to the agent_data directory
+        """
+        import shutil
+        from pathlib import Path
+        
+        data_path = Path(data_path)
+        if not data_path.exists():
+            return
+        
+        print(f"🧹 Cleaning up previous backtest data in {data_path}...")
+        
+        # Files to delete
+        files_to_delete = [
+            "asset_evolution.json",
+            "portfolio.json",
+            "trades.json",
+            "results.json"
+        ]
+        
+        # Delete result files
+        for filename in files_to_delete:
+            file_path = data_path / filename
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                    print(f"   ✅ Deleted: {filename}")
+                except Exception as e:
+                    print(f"   ⚠️  Failed to delete {filename}: {e}")
+        
+        # Delete position file
+        position_file = data_path / "position" / "position.jsonl"
+        if position_file.exists():
+            try:
+                position_file.unlink()
+                print(f"   ✅ Deleted: position/position.jsonl")
+            except Exception as e:
+                print(f"   ⚠️  Failed to delete position.jsonl: {e}")
+        
+        # Delete log directory
+        log_dir = data_path / "log"
+        if log_dir.exists():
+            try:
+                shutil.rmtree(log_dir)
+                print(f"   ✅ Deleted: log/ directory")
+            except Exception as e:
+                print(f"   ⚠️  Failed to delete log directory: {e}")
+        
+        print(f"✅ Cleanup completed")
+    
     def prepare_run(self, strategy_id: str, mode: TradingMode) -> Dict:
         """
         Prepare configuration for running a strategy in a specific mode
@@ -104,6 +158,10 @@ class RunManager:
         # Prepare configuration
         run_info = self.prepare_run(strategy_id, mode)
         
+        # For backtest mode, clean up previous backtest data
+        if mode == "backtest":
+            self._cleanup_backtest_data(run_info["data_path"])
+        
         # Update strategy status
         status_map = {
             "backtest": "backtest",
@@ -117,6 +175,10 @@ class RunManager:
         env["STRATEGY_ID"] = strategy_id
         env["TRADING_MODE"] = mode
         env["DATA_PATH"] = str(run_info["data_path"])
+        
+        # Set RUNTIME_ENV_PATH to ensure MCP services can access runtime_env.json
+        runtime_env_path = self.project_root / "runtime_env.json"
+        env["RUNTIME_ENV_PATH"] = str(runtime_env_path)
         
         if mode in ["simulate", "real"]:
             env["USE_MOOMOO"] = "true"
@@ -194,6 +256,25 @@ class RunManager:
             data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
             
             if not data_path.exists():
+                # Check if there's a log file with errors
+                log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
+                if log_file.exists():
+                    try:
+                        with open(log_file, 'r', encoding='utf-8') as f:
+                            log_content = f.read()
+                            # Check for error messages
+                            if "Error" in log_content or "error" in log_content.lower():
+                                # Extract last error line
+                                error_lines = [line for line in log_content.split('\n') if 'Error' in line or 'error' in line.lower()]
+                                if error_lines:
+                                    last_error = error_lines[-1].strip()
+                                    # Return error info instead of None
+                                    return {
+                                        "error": last_error,
+                                        "has_error": True
+                                    }
+                    except:
+                        pass
                 return None
             
             results = {
@@ -324,37 +405,57 @@ class RunManager:
             
             try:
                 process = psutil.Process(process_id)
-                if process.is_running():
+                # Check if process is running (not zombie)
+                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
                     # Check if it's actually our main.py process
-                    cmdline = process.cmdline()
-                    if any("main.py" in str(cmd) for cmd in cmdline):
-                        # Try to get detailed progress information
-                        data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
-                        progress_info = self._get_progress_info(strategy_id, mode, data_path)
-                        
-                        return {
-                            "is_running": True,
-                            "status": "running",
-                            "process_id": process_id,
-                            "start_time": process_info.get("start_time"),
-                            "progress": progress_info.get("progress", 0),
-                            "current_date": progress_info.get("current_date"),
-                            "total_dates": progress_info.get("total_dates", 0),
-                            "processed_dates": progress_info.get("processed_dates", 0),
-                            "latest_log": progress_info.get("latest_log"),
-                            "message": f"策略正在运行中... ({progress_info.get('progress', 0)}%)"
-                        }
-            except Exception as e:
-                # Handle psutil exceptions (NoSuchProcess, AccessDenied, etc.)
-                if psutil is not None:
-                    if isinstance(e, (psutil.NoSuchProcess, psutil.AccessDenied)):
+                    try:
+                        cmdline = process.cmdline()
+                        if any("main.py" in str(cmd) for cmd in cmdline):
+                            # Try to get detailed progress information
+                            data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
+                            progress_info = self._get_progress_info(strategy_id, mode, data_path)
+                            
+                            return {
+                                "is_running": True,
+                                "status": "running",
+                                "process_id": process_id,
+                                "start_time": process_info.get("start_time"),
+                                "progress": progress_info.get("progress", 0),
+                                "current_date": progress_info.get("current_date"),
+                                "total_dates": progress_info.get("total_dates", 0),
+                                "processed_dates": progress_info.get("processed_dates", 0),
+                                "latest_log": progress_info.get("latest_log"),
+                                "message": f"策略正在运行中... ({progress_info.get('progress', 0)}%)"
+                            }
+                    except (psutil.AccessDenied, psutil.ZombieProcess):
+                        # Process exists but we can't access it or it's a zombie
                         pass
-                    else:
-                        print(f"Error checking process: {e}")
-                else:
+            except psutil.NoSuchProcess:
+                # Process does not exist, will check results below
+                # Update process file status to reflect that process is gone
+                try:
+                    process_info["status"] = "stopped"
+                    with open(process_info_file, 'w', encoding='utf-8') as f:
+                        json.dump(process_info, f, indent=2, ensure_ascii=False)
+                except:
                     pass
+                pass
+            except Exception as e:
+                # Handle other psutil exceptions
+                if psutil is not None:
+                    print(f"Error checking process: {e}")
+                pass
             
             # Process is not running, check progress and results
+            # First, update process file status if process doesn't exist
+            try:
+                if process_info.get("status") == "running":
+                    process_info["status"] = "stopped"
+                    with open(process_info_file, 'w', encoding='utf-8') as f:
+                        json.dump(process_info, f, indent=2, ensure_ascii=False)
+            except:
+                pass
+            
             data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
             progress_info = self._get_progress_info(strategy_id, mode, data_path)
             results = self.get_run_results(strategy_id, mode)
@@ -383,11 +484,18 @@ class RunManager:
                     "latest_log": progress_info.get("latest_log")
                 }
             else:
+                # Process failed - get error from log if available
+                latest_log = progress_info.get("latest_log", "")
+                error_message = "策略运行已结束，但未生成结果"
+                if latest_log:
+                    error_message = f"策略运行失败: {latest_log}"
+                
                 return {
                     "is_running": False,
                     "status": "failed",
-                    "message": "策略运行已结束，但未生成结果",
-                    "progress": 0
+                    "message": error_message,
+                    "progress": 0,
+                    "latest_log": latest_log
                 }
                 
         except Exception as e:

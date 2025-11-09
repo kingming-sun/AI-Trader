@@ -1,4 +1,3 @@
-
 import os
 import json
 from pathlib import Path
@@ -6,9 +5,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def _load_runtime_env() -> dict:
+    # Try to get path from environment variable first
     path = os.environ.get("RUNTIME_ENV_PATH")
+    
+    # If not set, use default path (project root / runtime_env.json)
+    if not path or not path.strip():
+        # Get project root (assuming tools/ is in project root)
+        project_root = Path(__file__).parent.parent
+        path = project_root / "runtime_env.json"
+    else:
+        path = Path(path)
+    
     try:
-        if path and path.strip() and os.path.exists(path):
+        if path.exists():
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):

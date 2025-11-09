@@ -316,6 +316,15 @@ def get_strategy_results(strategy_id, mode):
                 "message": f"No results available for {mode} mode"
             })
         
+        # Check if results contain error information
+        if results.get("has_error"):
+            return jsonify({
+                "success": True,
+                "has_data": False,
+                "error": results.get("error", "Unknown error"),
+                "message": f"Backtest failed: {results.get('error', 'Unknown error')}"
+            })
+        
         return jsonify({
             "success": True,
             "has_data": True,

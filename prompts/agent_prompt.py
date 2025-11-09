@@ -76,27 +76,12 @@ def get_agent_system_prompt(today_date: str, signature: str) -> str:
     today_init_position = get_today_init_position(today_date, signature)
     yesterday_profit = get_yesterday_profit(today_date, yesterday_buy_prices, yesterday_sell_prices, today_init_position)
     
-    # Format positions for better readability
-    # If positions is empty, show a clear message
-    if not today_init_position or len(today_init_position) == 0:
-        positions_str = "{} (No positions found - this is likely the first trading day)"
-    else:
-        # Format positions in a more readable way
-        # Show only non-zero positions and CASH
-        non_zero_positions = {k: v for k, v in today_init_position.items() if v != 0 or k == "CASH"}
-        if non_zero_positions:
-            # Use compact format (no indent) for better compatibility
-            positions_str = json.dumps(non_zero_positions, ensure_ascii=False)
-        else:
-            # All positions are zero, but show CASH if available
-            if "CASH" in today_init_position:
-                positions_str = json.dumps({"CASH": today_init_position["CASH"]}, ensure_ascii=False)
-            else:
-                positions_str = json.dumps(today_init_position, ensure_ascii=False)
-    
+    # Use the same approach as main branch: directly pass the dictionary
+    # Python's str.format() will automatically convert it to string representation
+    # This ensures consistency and includes all positions (even zero values)
     return agent_system_prompt.format(
         date=today_date, 
-        positions=positions_str, 
+        positions=today_init_position, 
         STOP_SIGNAL=STOP_SIGNAL,
         yesterday_close_price=yesterday_sell_prices,
         today_buy_price=today_buy_price,

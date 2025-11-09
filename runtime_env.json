@@ -1,6 +1,6 @@
 {
     "SIGNATURE": "deepseek-chat-v3.1",
-    "TODAY_DATE": "2025-06-11",
-    "IF_TRADE": false,
-    "DATA_PATH": "data/strategies/strategy_20251104_141923/backtest/agent_data"
+    "TODAY_DATE": "2025-06-09",
+    "IF_TRADE": true,
+    "DATA_PATH": "/Users/qiming.sun/AI-Trader/data/strategies/strategy_20251104_141923/backtest/agent_data"
 }
