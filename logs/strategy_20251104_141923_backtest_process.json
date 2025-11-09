@@ -4,5 +4,5 @@
   "process_id": 93348,
   "config_file": "/Users/qiming.sun/AI-Trader/configs/runtime_strategy_20251104_141923_backtest.json",
   "start_time": 1762700522.328842,
-  "status": "running"
+  "status": "stopped"
 }
