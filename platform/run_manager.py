@@ -684,6 +684,155 @@ class RunManager:
                 "error": str(e)
             }
     
+    def resume_strategy(self, strategy_id: str, mode: str) -> Dict:
+        """
+        Resume a stopped strategy from where it left off
+        
+        Args:
+            strategy_id: Strategy identifier
+            mode: Trading mode
+            
+        Returns:
+            Dictionary with resume information
+        """
+        try:
+            strategy_log_dir = self._get_strategy_log_dir(strategy_id, mode)
+            process_info_file = strategy_log_dir / f"{strategy_id}_{mode}_process.json"
+            
+            # Check if there's a stopped process
+            if not process_info_file.exists():
+                return {
+                    "success": False,
+                    "error": "没有找到可继续的运行记录"
+                }
+            
+            with open(process_info_file, 'r', encoding='utf-8') as f:
+                process_info = json.load(f)
+            
+            # Check if process was stopped (not running)
+            if process_info.get("status") != "stopped":
+                # Check if process is actually running
+                process_id = process_info.get("process_id")
+                if process_id and psutil:
+                    try:
+                        process = psutil.Process(process_id)
+                        if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                            return {
+                                "success": False,
+                                "error": "策略正在运行中，无需继续"
+                            }
+                    except psutil.NoSuchProcess:
+                        pass  # Process doesn't exist, can resume
+            
+            # Check progress to see if there's something to resume
+            data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
+            progress_info = self._get_progress_info(strategy_id, mode, data_path)
+            
+            # For backtest mode, check if there's progress
+            if mode == "backtest":
+                if progress_info.get("progress", 0) == 0:
+                    return {
+                        "success": False,
+                        "error": "没有找到可继续的进度，请重新开始回测"
+                    }
+            
+            # Resume by running the strategy again (but don't clean up data)
+            # Prepare configuration
+            run_info = self.prepare_run(strategy_id, mode)
+            
+            # For backtest mode, DON'T clean up data - resume from where we left off
+            # Only clean up if progress is 0 (fresh start)
+            if mode == "backtest" and progress_info.get("progress", 0) > 0:
+                print(f"📊 Resuming backtest from {progress_info.get('current_date', 'unknown date')} ({progress_info.get('progress', 0)}% complete)")
+                # Don't clean up - we want to continue from where we left off
+            else:
+                # For other modes or fresh start, use normal cleanup
+                if mode == "backtest":
+                    self._cleanup_backtest_data(run_info["data_path"])
+            
+            # Update strategy status
+            status_map = {
+                "backtest": "backtest",
+                "simulate": "simulate",
+                "real": "real"
+            }
+            self.strategy_manager.update_strategy_status(strategy_id, status_map[mode])
+            
+            # Set environment variables
+            env = os.environ.copy()
+            env["STRATEGY_ID"] = strategy_id
+            env["TRADING_MODE"] = mode
+            env["DATA_PATH"] = str(run_info["data_path"])
+            
+            # Set RUNTIME_ENV_PATH
+            runtime_env_path = self.project_root / "runtime_env.json"
+            env["RUNTIME_ENV_PATH"] = str(runtime_env_path)
+            
+            # For resume, set RESUME flag to indicate continuation
+            if mode == "backtest" and progress_info.get("progress", 0) > 0:
+                env["RESUME_BACKTEST"] = "true"
+                env["RESUME_FROM_DATE"] = progress_info.get("current_date", "")
+            
+            if mode in ["simulate", "real"]:
+                env["USE_MOOMOO"] = "true"
+                env["MOOMOO_TRD_ENV"] = run_info["config"].get("moomoo_env", "SIMULATE")
+            
+            # Create config file for main.py
+            config_file = self.project_root / "configs" / f"runtime_{strategy_id}_{mode}.json"
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(run_info["config"], f, indent=2, ensure_ascii=False)
+            
+            # Create log directory
+            strategy_log_dir = run_info["data_path"].parent / "log"
+            strategy_log_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Append to existing log file instead of clearing it
+            log_file = strategy_log_dir / f"{strategy_id}_{mode}.log"
+            log_f = open(log_file, 'a', encoding='utf-8', buffering=1)  # Append mode
+            
+            # Start main.py
+            main_py = self.project_root / "main.py"
+            process = subprocess.Popen(
+                [sys.executable, '-u', str(main_py), str(config_file)],
+                cwd=str(self.project_root),
+                env=env,
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+            log_f.flush()
+            
+            # Update process info
+            with open(process_info_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "strategy_id": strategy_id,
+                    "mode": mode,
+                    "process_id": process.pid,
+                    "config_file": str(config_file),
+                    "start_time": time.time(),
+                    "status": "running",
+                    "resumed": True,
+                    "resumed_from_date": progress_info.get("current_date") if mode == "backtest" else None
+                }, f, indent=2)
+            
+            return {
+                "strategy_id": strategy_id,
+                "mode": mode,
+                "process_id": process.pid,
+                "config_file": str(config_file),
+                "status": "running",
+                "resumed": True,
+                "resumed_from": progress_info.get("current_date") if mode == "backtest" else None
+            }
+        except Exception as e:
+            import traceback
+            print(f"Error resuming strategy: {e}")
+            print(traceback.format_exc())
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
     def _get_progress_info(self, strategy_id: str, mode: str, data_path: Path) -> Dict:
         """Get detailed progress information from logs and position data"""
         try:

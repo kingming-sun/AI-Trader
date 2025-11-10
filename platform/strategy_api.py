@@ -478,6 +478,21 @@ def stop_strategy(strategy_id, mode):
         print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/strategies/<strategy_id>/resume/<mode>', methods=['POST'])
+def resume_strategy(strategy_id, mode):
+    """Resume a stopped strategy"""
+    try:
+        if mode not in ["backtest", "simulate", "real"]:
+            return jsonify({"success": False, "error": "Invalid mode"}), 400
+        
+        result = run_manager.resume_strategy(strategy_id, mode)
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        print(f"Error resuming strategy: {e}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/strategies/<strategy_id>/logs/<mode>/<date>', methods=['GET'])
 def get_log_content(strategy_id, mode, date):
     """Get log content for a specific date"""
@@ -583,24 +598,20 @@ def restart_service():
         if config_mode not in ['backtest', 'simulate', 'real']:
             config_mode = 'backtest'  # Default to backtest if invalid
         
-        # Convert to TradingMode
-        mode_map = {
-            'backtest': TradingMode.BACKTEST,
-            'simulate': TradingMode.SIMULATE,
-            'real': TradingMode.REAL
-        }
-        trading_mode = mode_map.get(config_mode, TradingMode.BACKTEST)
+        # TradingMode is a Literal type, so we can use the string directly
+        trading_mode: TradingMode = config_mode  # type: ignore
         
         # Step 1: Stop the current strategy if running
         stopped_info = None
-        for mode_name, mode_enum in mode_map.items():
-            stop_result = run_manager.stop_strategy(strategy_id, mode_enum)
+        # Try to stop strategy in all modes to ensure clean restart
+        for mode_name in ['backtest', 'simulate', 'real']:
+            stop_result = run_manager.stop_strategy(strategy_id, mode_name)
             if stop_result.get("success"):
                 stopped_info = {
                     "mode": mode_name,
                     "message": stop_result.get("message", "已停止")
                 }
-                break
+                # Don't break - continue to check all modes
         
         # Wait a bit for process to fully terminate
         import time

@@ -1425,6 +1425,11 @@ class StrategyDetail {
             this.stopRun();
         });
         
+        // Resume run button
+        document.getElementById('resumeRunBtn')?.addEventListener('click', () => {
+            this.resumeRun();
+        });
+        
         // Save backtest dates button (use event delegation on document)
         document.addEventListener('click', async (e) => {
             const btn = e.target.closest('#saveBacktestDatesBtn');
@@ -1633,6 +1638,19 @@ class StrategyDetail {
         document.getElementById('runStatusIcon').textContent = '⏳';
         document.getElementById('runStatusMessage').textContent = '正在启动策略...';
         
+        // Show stop button when running
+        const stopBtn = document.getElementById('stopRunBtn');
+        if (stopBtn) {
+            stopBtn.style.display = 'inline-block';
+            stopBtn.style.visibility = 'visible';
+        }
+        
+        // Hide resume button when running
+        const resumeBtn = document.getElementById('resumeRunBtn');
+        if (resumeBtn) {
+            resumeBtn.style.display = 'none';
+        }
+        
         // Show progress bar animation
         const progressFill = document.getElementById('runProgressFill');
         if (progressFill) {
@@ -1837,8 +1855,18 @@ class StrategyDetail {
                 }
             }
             
+            const resumeBtn = document.getElementById('resumeRunBtn');
             if (stopBtn) {
                 stopBtn.style.display = 'inline-block';
+                stopBtn.style.visibility = 'visible';
+            }
+            if (resumeBtn) {
+                resumeBtn.style.display = 'none';
+            }
+            
+            // Ensure container is visible when running
+            if (container) {
+                container.style.display = 'block';
             }
             
             // Update log content (only add new logs, avoid duplicates)
@@ -1890,6 +1918,10 @@ class StrategyDetail {
             if (stopBtn) {
                 stopBtn.style.display = 'none';
             }
+            const resumeBtnCompleted = document.getElementById('resumeRunBtn');
+            if (resumeBtnCompleted) {
+                resumeBtnCompleted.style.display = 'none';
+            }
             
             // Keep status container visible (progress bar should be persistent)
             // Removed auto-hide logic to keep progress bar always visible
@@ -1916,6 +1948,13 @@ class StrategyDetail {
             
             if (stopBtn) {
                 stopBtn.style.display = 'none';
+            }
+            const resumeBtn = document.getElementById('resumeRunBtn');
+            // Show resume button if there's progress to resume
+            if (resumeBtn && status.progress > 0) {
+                resumeBtn.style.display = 'inline-block';
+            } else if (resumeBtn) {
+                resumeBtn.style.display = 'none';
             }
         } else if (status.status === 'failed') {
             // Failed state
@@ -1970,8 +2009,58 @@ class StrategyDetail {
             return;
         }
         
-        // TODO: Implement stop functionality
-        alert('停止功能开发中...');
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/stop/${this.currentMode}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert(`✅ ${data.message || '策略已停止'}`);
+                // Refresh status
+                await this.checkRunStatus(this.currentMode);
+            } else {
+                alert(`❌ 停止失败：${data.error || '未知错误'}`);
+            }
+        } catch (error) {
+            console.error('Error stopping strategy:', error);
+            alert(`❌ 停止失败：${error.message}`);
+        }
+    }
+    
+    async resumeRun() {
+        const modeText = this.currentMode === 'backtest' ? '回测' : this.currentMode === 'simulate' ? '模拟盘' : '实盘';
+        if (!confirm(`确定要继续运行${modeText}吗？将从上次停止的地方继续。`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/resume/${this.currentMode}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const resumedFrom = data.resumed_from ? ` (从 ${data.resumed_from} 继续)` : '';
+                alert(`✅ ${modeText}已继续运行${resumedFrom}`);
+                // Show status and start monitoring
+                this.showRunStatus(this.currentMode);
+                this.startStatusMonitoring(this.currentMode);
+            } else {
+                alert(`❌ 继续失败：${data.error || '未知错误'}`);
+            }
+        } catch (error) {
+            console.error('Error resuming strategy:', error);
+            alert(`❌ 继续失败：${error.message}`);
+        }
     }
     
     // Check and show restart button if config was saved
