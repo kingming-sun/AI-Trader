@@ -95,6 +95,20 @@ class RunManager:
         
         print(f"✅ Cleanup completed")
     
+    def _get_strategy_log_dir(self, strategy_id: str, mode: str) -> Path:
+        """
+        Get the log directory path for a strategy
+        
+        Args:
+            strategy_id: Strategy identifier
+            mode: Trading mode
+            
+        Returns:
+            Path to the strategy log directory (same level as agent_data)
+        """
+        data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
+        return data_path.parent / "log"
+    
     def prepare_run(self, strategy_id: str, mode: TradingMode) -> Dict:
         """
         Prepare configuration for running a strategy in a specific mode
@@ -209,9 +223,12 @@ class RunManager:
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(run_info["config"], f, indent=2, ensure_ascii=False)
         
-        # Create log file for stdout/stderr
-        log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
-        log_file.parent.mkdir(parents=True, exist_ok=True)
+        # Create log directory in strategy data path (same level as agent_data)
+        strategy_log_dir = run_info["data_path"].parent / "log"
+        strategy_log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create log file for stdout/stderr in strategy directory
+        log_file = strategy_log_dir / f"{strategy_id}_{mode}.log"
         # Clear old log file
         if log_file.exists():
             log_file.unlink()
@@ -234,9 +251,8 @@ class RunManager:
         # Note: log_f will be closed when process terminates
         # Store log file handle in process info for potential cleanup
         
-        # Store process info for status checking
-        process_info_file = self.project_root / "logs" / f"{strategy_id}_{mode}_process.json"
-        process_info_file.parent.mkdir(parents=True, exist_ok=True)
+        # Store process info for status checking in strategy directory
+        process_info_file = strategy_log_dir / f"{strategy_id}_{mode}_process.json"
         with open(process_info_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "strategy_id": strategy_id,
@@ -248,7 +264,7 @@ class RunManager:
             }, f, indent=2)
         
         # Clean up old progress file if exists
-        progress_file = self.project_root / "logs" / f"{strategy_id}_{mode}_progress.json"
+        progress_file = strategy_log_dir / f"{strategy_id}_{mode}_progress.json"
         if progress_file.exists():
             progress_file.unlink()
         
@@ -277,7 +293,8 @@ class RunManager:
             
             if not data_path.exists():
                 # Check if there's a log file with errors
-                log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
+                strategy_log_dir = self._get_strategy_log_dir(strategy_id, mode)
+                log_file = strategy_log_dir / f"{strategy_id}_{mode}.log"
                 if log_file.exists():
                     try:
                         with open(log_file, 'r', encoding='utf-8') as f:
@@ -395,7 +412,8 @@ class RunManager:
             Dictionary with status information
         """
         try:
-            process_info_file = self.project_root / "logs" / f"{strategy_id}_{mode}_process.json"
+            strategy_log_dir = self._get_strategy_log_dir(strategy_id, mode)
+            process_info_file = strategy_log_dir / f"{strategy_id}_{mode}_process.json"
             
             if not process_info_file.exists():
                 return {
@@ -539,7 +557,8 @@ class RunManager:
             Dictionary with stop information
         """
         try:
-            process_info_file = self.project_root / "logs" / f"{strategy_id}_{mode}_process.json"
+            strategy_log_dir = self._get_strategy_log_dir(strategy_id, mode)
+            process_info_file = strategy_log_dir / f"{strategy_id}_{mode}_process.json"
             
             if not process_info_file.exists():
                 return {
@@ -657,7 +676,8 @@ class RunManager:
             }
             
             # Check progress file first (persistent storage)
-            progress_file = self.project_root / "logs" / f"{strategy_id}_{mode}_progress.json"
+            strategy_log_dir = self._get_strategy_log_dir(strategy_id, mode)
+            progress_file = strategy_log_dir / f"{strategy_id}_{mode}_progress.json"
             if progress_file.exists():
                 try:
                     with open(progress_file, 'r', encoding='utf-8') as f:
@@ -667,7 +687,8 @@ class RunManager:
                     pass
             
             # Try to get latest log from stdout log file first
-            stdout_log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
+            strategy_log_dir = self._get_strategy_log_dir(strategy_id, mode)
+            stdout_log_file = strategy_log_dir / f"{strategy_id}_{mode}.log"
             if stdout_log_file.exists():
                 try:
                     with open(stdout_log_file, 'r', encoding='utf-8') as f:
@@ -783,7 +804,8 @@ class RunManager:
                         pass
             
             if strategy_id and mode:
-                stdout_log_file = self.project_root / "logs" / f"{strategy_id}_{mode}.log"
+                strategy_log_dir = self._get_strategy_log_dir(strategy_id, mode)
+                stdout_log_file = strategy_log_dir / f"{strategy_id}_{mode}.log"
                 if stdout_log_file.exists():
                     try:
                         # Read last few lines from stdout log

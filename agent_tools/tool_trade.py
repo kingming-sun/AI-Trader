@@ -156,8 +156,8 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
         new_position[symbol] += amount
         
         # Step 6: Record transaction to position.jsonl file
-        # Try new path structure first (from DATA_PATH environment variable)
-        data_path = os.getenv("DATA_PATH")
+        # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
+        data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
         if data_path:
             position_file_path = os.path.join(data_path, "position", "position.jsonl")
         else:
@@ -301,8 +301,8 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
     new_position["CASH"] = new_position.get("CASH", 0) + this_symbol_price * amount
 
     # Step 6: Record transaction to position.jsonl file
-    # Try new path structure first (from DATA_PATH environment variable)
-    data_path = os.getenv("DATA_PATH")
+    # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
+    data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
     if data_path:
         position_file_path = os.path.join(data_path, "position", "position.jsonl")
     else:

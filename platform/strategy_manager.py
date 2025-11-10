@@ -324,38 +324,77 @@ When you think your task is complete, output
                 except Exception as e:
                     print(f"⚠️  Warning: Could not delete runtime config {runtime_file}: {e}")
             
-            # Delete log files
-            logs_dir = self.project_root / "logs"
-            if logs_dir.exists():
+            # Delete log files from strategy directories (new location)
+            # Logs are now stored in data/strategies/{strategy_id}/{mode}/log/
+            strategy_data_dir = self.data_dir / strategy_id
+            if strategy_data_dir.exists():
+                # Find all mode directories (backtest, simulate, real)
+                for mode_dir in strategy_data_dir.iterdir():
+                    if mode_dir.is_dir():
+                        logs_dir = mode_dir / "log"
+                        if logs_dir.exists():
+                            # Delete log files: {strategy_id}_{mode}.log
+                            log_pattern = f"{strategy_id}_*.log"
+                            log_files = list(logs_dir.glob(log_pattern))
+                            for log_file in log_files:
+                                try:
+                                    log_file.unlink()
+                                    print(f"✅ Deleted log file: {log_file}")
+                                except Exception as e:
+                                    print(f"⚠️  Warning: Could not delete log file {log_file}: {e}")
+                            
+                            # Delete process info files: {strategy_id}_{mode}_process.json
+                            process_pattern = f"{strategy_id}_*_process.json"
+                            process_files = list(logs_dir.glob(process_pattern))
+                            for process_file in process_files:
+                                try:
+                                    process_file.unlink()
+                                    print(f"✅ Deleted process info: {process_file}")
+                                except Exception as e:
+                                    print(f"⚠️  Warning: Could not delete process info {process_file}: {e}")
+                            
+                            # Delete progress files: {strategy_id}_{mode}_progress.json
+                            progress_pattern = f"{strategy_id}_*_progress.json"
+                            progress_files = list(logs_dir.glob(progress_pattern))
+                            for progress_file in progress_files:
+                                try:
+                                    progress_file.unlink()
+                                    print(f"✅ Deleted progress file: {progress_file}")
+                                except Exception as e:
+                                    print(f"⚠️  Warning: Could not delete progress file {progress_file}: {e}")
+            
+            # Also check old logs directory for backward compatibility
+            old_logs_dir = self.project_root / "logs"
+            if old_logs_dir.exists():
                 # Delete log files: {strategy_id}_{mode}.log
                 log_pattern = f"{strategy_id}_*.log"
-                log_files = list(logs_dir.glob(log_pattern))
+                log_files = list(old_logs_dir.glob(log_pattern))
                 for log_file in log_files:
                     try:
                         log_file.unlink()
-                        print(f"✅ Deleted log file: {log_file}")
+                        print(f"✅ Deleted old log file: {log_file}")
                     except Exception as e:
-                        print(f"⚠️  Warning: Could not delete log file {log_file}: {e}")
+                        print(f"⚠️  Warning: Could not delete old log file {log_file}: {e}")
                 
                 # Delete process info files: {strategy_id}_{mode}_process.json
                 process_pattern = f"{strategy_id}_*_process.json"
-                process_files = list(logs_dir.glob(process_pattern))
+                process_files = list(old_logs_dir.glob(process_pattern))
                 for process_file in process_files:
                     try:
                         process_file.unlink()
-                        print(f"✅ Deleted process info: {process_file}")
+                        print(f"✅ Deleted old process info: {process_file}")
                     except Exception as e:
-                        print(f"⚠️  Warning: Could not delete process info {process_file}: {e}")
+                        print(f"⚠️  Warning: Could not delete old process info {process_file}: {e}")
                 
                 # Delete progress files: {strategy_id}_{mode}_progress.json
                 progress_pattern = f"{strategy_id}_*_progress.json"
-                progress_files = list(logs_dir.glob(progress_pattern))
+                progress_files = list(old_logs_dir.glob(progress_pattern))
                 for progress_file in progress_files:
                     try:
                         progress_file.unlink()
-                        print(f"✅ Deleted progress file: {progress_file}")
+                        print(f"✅ Deleted old progress file: {progress_file}")
                     except Exception as e:
-                        print(f"⚠️  Warning: Could not delete progress file {progress_file}: {e}")
+                        print(f"⚠️  Warning: Could not delete old progress file {progress_file}: {e}")
             
             return True
         except Exception as e:
