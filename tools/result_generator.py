@@ -100,8 +100,10 @@ def generate_asset_evolution(positions: List[Dict[str, Any]], initial_cash: floa
     
     if not positions:
         # Create initial record if no positions
+        now = datetime.now()
         asset_evolution.append({
-            "date": datetime.now().strftime("%Y-%m-%d"),
+            "date": now.strftime("%Y-%m-%d"),
+            "datetime": now.strftime("%Y-%m-%d %H:%M:%S"),
             "total_value": initial_cash,
             "cash": initial_cash,
             "stock_value": 0,
@@ -113,10 +115,33 @@ def generate_asset_evolution(positions: List[Dict[str, Any]], initial_cash: floa
     last_valid_cash = initial_cash
     last_valid_stock_value = 0
     
+    # Track same-day transaction count to generate time
+    date_counter = {}  # {date: count}
+    
     for i, pos_data in enumerate(positions):
         date = pos_data.get("date", datetime.now().strftime("%Y-%m-%d"))
         # Support both "position" and "positions" field names
         position = pos_data.get("positions", pos_data.get("position", {}))
+        
+        # Generate time based on same-day transaction order
+        # First transaction of the day: 09:30, second: 10:00, third: 10:30, etc.
+        if date not in date_counter:
+            date_counter[date] = 0
+        else:
+            date_counter[date] += 1
+        
+        # Calculate time: start at 09:30, add 30 minutes for each transaction
+        hour = 9
+        minute = 30 + date_counter[date] * 30
+        # Handle hour overflow
+        hour += minute // 60
+        minute = minute % 60
+        # Cap at market close time (16:00)
+        if hour >= 16:
+            hour = 15
+            minute = 59
+        
+        datetime_str = f"{date} {hour:02d}:{minute:02d}:00"
         
         # Check if position has actual data
         has_data = position and (position.get("CASH", 0) > 0 or any(v > 0 for k, v in position.items() if k != "CASH"))
@@ -141,6 +166,7 @@ def generate_asset_evolution(positions: List[Dict[str, Any]], initial_cash: floa
         
         asset_evolution.append({
             "date": date,
+            "datetime": datetime_str,
             "total_value": total_value,
             "cash": cash,
             "stock_value": stock_value,

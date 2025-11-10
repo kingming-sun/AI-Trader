@@ -1047,17 +1047,32 @@ class StrategyDetail {
         
         let dates = [];
         let values = [];
+        let sortedData = null;
         
         if (assetData && assetData.length > 0) {
-            // Sort data by date to ensure correct chronological order
-            const sortedData = [...assetData].sort((a, b) => {
-                const dateA = a.date || a.timestamp || '';
-                const dateB = b.date || b.timestamp || '';
+            // Sort data by datetime or date to ensure correct chronological order
+            sortedData = [...assetData].sort((a, b) => {
+                // Prefer datetime if available, otherwise use date
+                const dateA = a.datetime || a.date || a.timestamp || '';
+                const dateB = b.datetime || b.date || b.timestamp || '';
                 return dateA.localeCompare(dateB);
             });
             
-            // Use sorted real data
-            dates = sortedData.map(point => point.date || point.timestamp || '');
+            // Use datetime if available, otherwise fallback to date
+            dates = sortedData.map(point => {
+                if (point.datetime) {
+                    // Format datetime for display: "YYYY-MM-DD HH:MM"
+                    const dt = point.datetime;
+                    // If it's already in format "YYYY-MM-DD HH:MM:SS", format it
+                    if (dt.includes(' ')) {
+                        const [datePart, timePart] = dt.split(' ');
+                        const [hour, minute] = timePart.split(':');
+                        return `${datePart} ${hour}:${minute}`;
+                    }
+                    return dt;
+                }
+                return point.date || point.timestamp || '';
+            });
             values = sortedData.map(point => point.total_value || point.value || 0);
         } else {
             // Generate sample data as fallback
@@ -1099,6 +1114,17 @@ class StrategyDetail {
                     },
                     tooltip: {
                         callbacks: {
+                            title: function(context) {
+                                // Show full datetime in tooltip title
+                                const index = context[0].dataIndex;
+                                if (sortedData && sortedData.length > index) {
+                                    const point = sortedData[index];
+                                    if (point.datetime) {
+                                        return point.datetime;
+                                    }
+                                }
+                                return context[0].label;
+                            },
                             label: function(context) {
                                 return `资产价值: $${context.parsed.y.toFixed(2)}`;
                             }
