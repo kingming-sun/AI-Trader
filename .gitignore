@@ -70,3 +70,5 @@ dmypy.json
 *.json
 *.jsonl
 *.jsonc
+# 例外：允许 data/merged.jsonl 被跟踪
+!data/merged.jsonl
