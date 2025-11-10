@@ -112,11 +112,31 @@ class RunManager:
         # Get data path
         data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
         
-        # Get prompt path
+        # Get prompt path (prefer JSON format, fallback to Python for compatibility)
         strategy_dir = self.strategy_manager.strategies_dir / strategy_id
-        prompt_file = strategy_dir / "prompts" / f"{mode}_prompt.py"
-        if not prompt_file.exists():
-            prompt_file = strategy_dir / "prompts" / "base_prompt.py"
+        prompts_dir = strategy_dir / "prompts"
+        prompt_file = None
+        
+        # Try mode-specific JSON prompt first
+        mode_prompt_json = prompts_dir / f"{mode}_prompt.json"
+        if mode_prompt_json.exists():
+            prompt_file = mode_prompt_json
+        
+        # Fallback to base JSON prompt
+        if not prompt_file or not prompt_file.exists():
+            base_prompt_json = prompts_dir / "base_prompt.json"
+            if base_prompt_json.exists():
+                prompt_file = base_prompt_json
+        
+        # Compatibility: Try old Python format if JSON doesn't exist
+        if not prompt_file or not prompt_file.exists():
+            mode_prompt_py = prompts_dir / f"{mode}_prompt.py"
+            if mode_prompt_py.exists():
+                prompt_file = mode_prompt_py
+            else:
+                base_prompt_py = prompts_dir / "base_prompt.py"
+                if base_prompt_py.exists():
+                    prompt_file = base_prompt_py
         
         return {
             "config": config,
@@ -497,12 +517,132 @@ class RunManager:
                     "progress": 0,
                     "latest_log": latest_log
                 }
-                
         except Exception as e:
+            import traceback
+            print(f"Error checking run status: {e}")
+            print(traceback.format_exc())
             return {
                 "is_running": False,
                 "status": "error",
                 "message": f"检查状态时出错: {str(e)}"
+            }
+    
+    def stop_strategy(self, strategy_id: str, mode: str) -> Dict:
+        """
+        Stop a running strategy
+        
+        Args:
+            strategy_id: Strategy identifier
+            mode: Trading mode
+            
+        Returns:
+            Dictionary with stop information
+        """
+        try:
+            process_info_file = self.project_root / "logs" / f"{strategy_id}_{mode}_process.json"
+            
+            if not process_info_file.exists():
+                return {
+                    "success": False,
+                    "error": "策略未运行，无法停止"
+                }
+            
+            with open(process_info_file, 'r', encoding='utf-8') as f:
+                process_info = json.load(f)
+            
+            process_id = process_info.get("process_id")
+            if not process_id:
+                return {
+                    "success": False,
+                    "error": "进程信息不完整"
+                }
+            
+            # Check if process is still running
+            if psutil is None:
+                return {
+                    "success": False,
+                    "error": "psutil 模块未安装，无法停止进程。请运行: pip install psutil"
+                }
+            
+            try:
+                process = psutil.Process(process_id)
+                # Check if process is running
+                if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                    # Try graceful termination first
+                    try:
+                        process.terminate()
+                        # Wait up to 5 seconds for graceful shutdown
+                        try:
+                            process.wait(timeout=5)
+                            stopped_gracefully = True
+                        except psutil.TimeoutExpired:
+                            # Force kill if graceful termination failed
+                            process.kill()
+                            stopped_gracefully = False
+                        
+                        # Update process info
+                        process_info["status"] = "stopped"
+                        process_info["stopped_at"] = time.time()
+                        with open(process_info_file, 'w', encoding='utf-8') as f:
+                            json.dump(process_info, f, indent=2, ensure_ascii=False)
+                        
+                        # Update strategy status
+                        self.strategy_manager.update_strategy_status(strategy_id, "design")
+                        
+                        return {
+                            "success": True,
+                            "message": "策略已停止" if stopped_gracefully else "策略已强制停止",
+                            "process_id": process_id,
+                            "stopped_gracefully": stopped_gracefully
+                        }
+                    except psutil.NoSuchProcess:
+                        # Process already terminated
+                        process_info["status"] = "stopped"
+                        process_info["stopped_at"] = time.time()
+                        with open(process_info_file, 'w', encoding='utf-8') as f:
+                            json.dump(process_info, f, indent=2, ensure_ascii=False)
+                        self.strategy_manager.update_strategy_status(strategy_id, "design")
+                        return {
+                            "success": True,
+                            "message": "策略已停止（进程已不存在）",
+                            "process_id": process_id
+                        }
+                else:
+                    # Process not running
+                    process_info["status"] = "stopped"
+                    process_info["stopped_at"] = time.time()
+                    with open(process_info_file, 'w', encoding='utf-8') as f:
+                        json.dump(process_info, f, indent=2, ensure_ascii=False)
+                    self.strategy_manager.update_strategy_status(strategy_id, "design")
+                    return {
+                        "success": True,
+                        "message": "策略已停止（进程未运行）",
+                        "process_id": process_id
+                    }
+            except psutil.NoSuchProcess:
+                # Process does not exist
+                process_info["status"] = "stopped"
+                process_info["stopped_at"] = time.time()
+                with open(process_info_file, 'w', encoding='utf-8') as f:
+                    json.dump(process_info, f, indent=2, ensure_ascii=False)
+                self.strategy_manager.update_strategy_status(strategy_id, "design")
+                return {
+                    "success": True,
+                    "message": "策略已停止（进程不存在）",
+                    "process_id": process_id
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"停止策略时出错: {str(e)}"
+                }
+        except Exception as e:
+            import traceback
+            print(f"Error stopping strategy: {e}")
+            print(traceback.format_exc())
+            return {
+                "success": False,
+                "error": str(e)
             }
     
     def _get_progress_info(self, strategy_id: str, mode: str, data_path: Path) -> Dict:

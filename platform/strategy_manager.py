@@ -41,6 +41,10 @@ class StrategyManager:
         Returns:
             strategy_id: Unique strategy identifier
         """
+        # Ensure strategy_name is not empty
+        if not strategy_name or not strategy_name.strip():
+            strategy_name = "未命名策略"
+        
         # Generate strategy ID
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         strategy_id = f"strategy_{timestamp}"
@@ -87,7 +91,7 @@ class StrategyManager:
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(base_config, f, indent=2, ensure_ascii=False)
         
-        # Create default prompt
+        # Create default prompt (save as JSON)
         default_prompt = '''You are a stock fundamental analysis trading assistant.
 
 Your goals are:
@@ -123,10 +127,15 @@ When you think your task is complete, output
 {STOP_SIGNAL}
 '''
         
-        prompt_file = prompts_dir / "base_prompt.py"
+        # Save prompt as JSON
+        prompt_file = prompts_dir / "base_prompt.json"
+        prompt_config = {
+            "prompt": default_prompt,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
         with open(prompt_file, 'w', encoding='utf-8') as f:
-            f.write(f'''agent_system_prompt = """{default_prompt}"""
-''')
+            json.dump(prompt_config, f, indent=2, ensure_ascii=False)
         
         return strategy_id
     
@@ -289,22 +298,69 @@ When you think your task is complete, output
             True if deletion successful, False otherwise
         """
         import shutil
+        import glob
         
         try:
             # Delete strategy config directory
             strategy_config_dir = self.strategies_dir / strategy_id
             if strategy_config_dir.exists():
                 shutil.rmtree(strategy_config_dir)
-                print(f"Deleted strategy config: {strategy_config_dir}")
+                print(f"✅ Deleted strategy config: {strategy_config_dir}")
             
             # Delete strategy data directory
             strategy_data_dir = self.data_dir / strategy_id
             if strategy_data_dir.exists():
                 shutil.rmtree(strategy_data_dir)
-                print(f"Deleted strategy data: {strategy_data_dir}")
+                print(f"✅ Deleted strategy data: {strategy_data_dir}")
+            
+            # Delete runtime config files in configs directory
+            configs_dir = self.project_root / "configs"
+            runtime_pattern = f"runtime_{strategy_id}_*.json"
+            runtime_files = list(configs_dir.glob(runtime_pattern))
+            for runtime_file in runtime_files:
+                try:
+                    runtime_file.unlink()
+                    print(f"✅ Deleted runtime config: {runtime_file}")
+                except Exception as e:
+                    print(f"⚠️  Warning: Could not delete runtime config {runtime_file}: {e}")
+            
+            # Delete log files
+            logs_dir = self.project_root / "logs"
+            if logs_dir.exists():
+                # Delete log files: {strategy_id}_{mode}.log
+                log_pattern = f"{strategy_id}_*.log"
+                log_files = list(logs_dir.glob(log_pattern))
+                for log_file in log_files:
+                    try:
+                        log_file.unlink()
+                        print(f"✅ Deleted log file: {log_file}")
+                    except Exception as e:
+                        print(f"⚠️  Warning: Could not delete log file {log_file}: {e}")
+                
+                # Delete process info files: {strategy_id}_{mode}_process.json
+                process_pattern = f"{strategy_id}_*_process.json"
+                process_files = list(logs_dir.glob(process_pattern))
+                for process_file in process_files:
+                    try:
+                        process_file.unlink()
+                        print(f"✅ Deleted process info: {process_file}")
+                    except Exception as e:
+                        print(f"⚠️  Warning: Could not delete process info {process_file}: {e}")
+                
+                # Delete progress files: {strategy_id}_{mode}_progress.json
+                progress_pattern = f"{strategy_id}_*_progress.json"
+                progress_files = list(logs_dir.glob(progress_pattern))
+                for progress_file in progress_files:
+                    try:
+                        progress_file.unlink()
+                        print(f"✅ Deleted progress file: {progress_file}")
+                    except Exception as e:
+                        print(f"⚠️  Warning: Could not delete progress file {progress_file}: {e}")
             
             return True
         except Exception as e:
-            print(f"Error deleting strategy {strategy_id}: {e}")
+            import traceback
+            print(f"❌ Error deleting strategy {strategy_id}: {e}")
+            print(traceback.format_exc())
             return False
 

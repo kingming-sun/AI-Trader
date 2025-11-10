@@ -205,8 +205,11 @@ class StrategyDetail {
             const response = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}`);
             if (!response.ok) throw new Error('Failed to load strategy info');
             
-            const strategy = await response.json();
-            document.getElementById('strategyName').textContent = `策略: ${strategy.strategy_name || '未命名策略'}`;
+            const data = await response.json();
+            // API returns {success: true, config: {...}} or {config: {...}}
+            const config = data.config || data;
+            const strategyName = config.strategy_name || '未命名策略';
+            document.getElementById('strategyName').textContent = `策略: ${strategyName}`;
         } catch (error) {
             console.error('Error loading strategy info:', error);
             document.getElementById('strategyName').textContent = '策略详情';
@@ -252,8 +255,11 @@ class StrategyDetail {
 
     // Load content for specific tab
     async loadTabContent(tabId) {
+        console.log(`📂 Loading tab content for: ${tabId}`);
         switch (tabId) {
             case 'config':
+                // Small delay to ensure DOM is ready
+                await new Promise(resolve => setTimeout(resolve, 100));
                 await this.loadConfigData();
                 break;
             case 'asset':
@@ -519,7 +525,15 @@ class StrategyDetail {
 
     // Load configuration data
     async loadConfigData() {
+        console.log(`⚙️ Loading config data for mode: ${this.currentConfigMode}, strategy: ${this.strategyId}`);
         try {
+            // Ensure DOM is ready
+            const systemPromptElement = document.getElementById('systemPrompt');
+            if (!systemPromptElement) {
+                console.warn('⚠️ systemPrompt element not found, waiting for DOM...');
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
             // Update date range visibility first
             this.updateDateRangeVisibility();
             
@@ -560,12 +574,37 @@ class StrategyDetail {
             }
             
             // Load prompt
-            const promptResponse = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/prompt/${this.currentConfigMode}`);
-            if (promptResponse.ok) {
-                const promptData = await promptResponse.json();
-                document.getElementById('systemPrompt').value = promptData.prompt || '';
-            } else {
-                document.getElementById('systemPrompt').value = '';
+            try {
+                const promptUrl = `${this.apiBase}/api/strategies/${this.strategyId}/prompt/${this.currentConfigMode}`;
+                console.log(`📝 Loading prompt from: ${promptUrl}`);
+                const promptResponse = await fetch(promptUrl);
+                if (promptResponse.ok) {
+                    const promptData = await promptResponse.json();
+                    console.log('📝 Prompt API response:', promptData);
+                    // API returns {success: true, prompt: "..."} or {prompt: "..."}
+                    const prompt = promptData.prompt || (typeof promptData === 'string' ? promptData : '');
+                    console.log(`📝 Extracted prompt length: ${prompt ? prompt.length : 0}`);
+                    const systemPromptElement = document.getElementById('systemPrompt');
+                    if (systemPromptElement) {
+                        systemPromptElement.value = prompt || '';
+                        console.log('✅ Prompt loaded successfully');
+                    } else {
+                        console.error('❌ systemPrompt element not found');
+                    }
+                } else {
+                    const errorText = await promptResponse.text().catch(() => '');
+                    console.warn('❌ Failed to load prompt:', promptResponse.status, promptResponse.statusText, errorText);
+                    const systemPromptElement = document.getElementById('systemPrompt');
+                    if (systemPromptElement) {
+                        systemPromptElement.value = '';
+                    }
+                }
+            } catch (promptError) {
+                console.error('❌ Error loading prompt:', promptError);
+                const systemPromptElement = document.getElementById('systemPrompt');
+                if (systemPromptElement) {
+                    systemPromptElement.value = '';
+                }
             }
         } catch (error) {
             console.error('Error loading config:', error);

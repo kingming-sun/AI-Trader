@@ -64,15 +64,100 @@ When you think your task is complete, output
 {STOP_SIGNAL}
 """
 
+def load_strategy_prompt(strategy_id: str = None, mode: str = "backtest") -> Optional[str]:
+    """
+    Load prompt from strategy-specific file (JSON or Python format)
+    
+    Args:
+        strategy_id: Strategy identifier (from environment variable STRATEGY_ID if not provided)
+        mode: Trading mode (from environment variable TRADING_MODE if not provided)
+    
+    Returns:
+        Prompt text if found, None otherwise
+    """
+    import json
+    import re
+    
+    # Get strategy_id and mode from environment if not provided
+    if strategy_id is None:
+        strategy_id = os.getenv("STRATEGY_ID")
+    if mode is None:
+        mode = os.getenv("TRADING_MODE", "backtest")
+    
+    if not strategy_id:
+        return None
+    
+    # Get strategy directory
+    project_root = Path(__file__).parent.parent
+    strategy_dir = project_root / "configs" / "strategies" / strategy_id
+    prompts_dir = strategy_dir / "prompts"
+    
+    if not prompts_dir.exists():
+        return None
+    
+    prompt_file = None
+    
+    # Try mode-specific JSON prompt first
+    mode_prompt_json = prompts_dir / f"{mode}_prompt.json"
+    if mode_prompt_json.exists():
+        prompt_file = mode_prompt_json
+    
+    # Fallback to base JSON prompt
+    if not prompt_file or not prompt_file.exists():
+        base_prompt_json = prompts_dir / "base_prompt.json"
+        if base_prompt_json.exists():
+            prompt_file = base_prompt_json
+    
+    # Compatibility: Try old Python format if JSON doesn't exist
+    if not prompt_file or not prompt_file.exists():
+        mode_prompt_py = prompts_dir / f"{mode}_prompt.py"
+        if mode_prompt_py.exists():
+            prompt_file = mode_prompt_py
+        else:
+            base_prompt_py = prompts_dir / "base_prompt.py"
+            if base_prompt_py.exists():
+                prompt_file = base_prompt_py
+    
+    if not prompt_file or not prompt_file.exists():
+        return None
+    
+    try:
+        # Read JSON format
+        if prompt_file.suffix == '.json':
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                prompt_data = json.load(f)
+                prompt = prompt_data.get('prompt', '').strip()
+                return prompt if prompt else None
+        
+        # Read old Python format (for compatibility)
+        if prompt_file.suffix == '.py':
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # Try to match the prompt pattern
+                match = re.search(r'agent_system_prompt = """([\s\S]*?)"""', content)
+                if match:
+                    prompt = match.group(1).strip()
+                    return prompt if prompt else None
+    except Exception as e:
+        print(f"⚠️  Error loading strategy prompt from {prompt_file}: {e}")
+        return None
+    
+    return None
+
 def get_agent_system_prompt(today_date: str, signature: str) -> str:
     print(f"signature: {signature}")
     print(f"today_date: {today_date}")
+    
+    # Try to load strategy-specific prompt first
+    strategy_prompt = load_strategy_prompt()
+    prompt_template = strategy_prompt if strategy_prompt else agent_system_prompt
+    
     # Get yesterday's buy and sell prices
     yesterday_buy_prices, yesterday_sell_prices = get_yesterday_open_and_close_price(today_date, all_nasdaq_100_symbols)
     today_buy_price = get_open_prices(today_date, all_nasdaq_100_symbols)
     today_init_position = get_today_init_position(today_date, signature)
     
-    return agent_system_prompt.format(
+    return prompt_template.format(
         date=today_date, 
         positions=today_init_position, 
         STOP_SIGNAL=STOP_SIGNAL,

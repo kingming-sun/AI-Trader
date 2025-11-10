@@ -7,6 +7,7 @@ Flask API for strategy management and mode switching
 import os
 import sys
 import json
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from pathlib import Path
@@ -41,8 +42,12 @@ def create_strategy():
     """Create a new strategy"""
     try:
         data = request.get_json()
-        strategy_name = data.get('strategy_name', 'New Strategy')
-        description = data.get('description', '')
+        strategy_name = data.get('strategy_name', '').strip()
+        description = data.get('description', '').strip()
+        
+        # If strategy_name is empty, use default name
+        if not strategy_name:
+            strategy_name = '未命名策略'
         
         strategy_id = strategy_manager.create_strategy(strategy_name, description)
         return jsonify({
@@ -66,27 +71,30 @@ def get_strategy(strategy_id):
 def delete_strategy(strategy_id):
     """Delete a strategy and all its data"""
     try:
-        # Check if strategy is running
-        try:
-            base_config = strategy_manager.get_strategy_config(strategy_id, "backtest")
-            strategy_status = base_config.get('status', 'design')
-            
-            if strategy_status in ['backtest', 'simulate', 'real']:
-                return jsonify({
-                    "success": False,
-                    "error": f"Cannot delete strategy in '{strategy_status}' status. Please stop it first."
-                }), 400
-        except Exception as e:
-            # If config doesn't exist, still allow deletion
-            print(f"Warning: Could not check strategy status: {e}")
+        # Check if strategy is running and stop it if necessary
+        stopped_modes = []
+        for mode in ['backtest', 'simulate', 'real']:
+            try:
+                status = run_manager.check_run_status(strategy_id, mode)
+                if status.get('is_running', False):
+                    # Stop the running strategy
+                    stop_result = run_manager.stop_strategy(strategy_id, mode)
+                    if stop_result.get('success'):
+                        stopped_modes.append(mode)
+            except Exception as e:
+                print(f"Warning: Could not check/stop strategy in {mode} mode: {e}")
         
         # Delete strategy
         result = strategy_manager.delete_strategy(strategy_id)
         
         if result:
+            message = f"Strategy {strategy_id} deleted successfully"
+            if stopped_modes:
+                message += f" (已停止运行中的模式: {', '.join(stopped_modes)})"
             return jsonify({
                 "success": True,
-                "message": f"Strategy {strategy_id} deleted successfully"
+                "message": message,
+                "stopped_modes": stopped_modes
             })
         else:
             return jsonify({
@@ -94,6 +102,9 @@ def delete_strategy(strategy_id):
                 "error": "Failed to delete strategy"
             }), 500
     except Exception as e:
+        import traceback
+        print(f"Error deleting strategy: {e}")
+        print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/strategies/<strategy_id>/config/<mode>', methods=['GET'])
@@ -231,25 +242,73 @@ def get_strategy_prompt(strategy_id, mode):
     """Get strategy prompt for a specific mode"""
     try:
         strategy_dir = strategy_manager.strategies_dir / strategy_id
-        prompt_file = strategy_dir / "prompts" / f"{mode}_prompt.py"
+        prompts_dir = strategy_dir / "prompts"
+        prompt_file = None
         
-        if not prompt_file.exists():
-            prompt_file = strategy_dir / "prompts" / "base_prompt.py"
+        # Try mode-specific JSON prompt first
+        mode_prompt_json = prompts_dir / f"{mode}_prompt.json"
+        if mode_prompt_json.exists():
+            prompt_file = mode_prompt_json
         
-        if not prompt_file.exists():
-            return jsonify({"success": False, "error": "Prompt not found"}), 404
+        # Fallback to base JSON prompt
+        if not prompt_file or not prompt_file.exists():
+            base_prompt_json = prompts_dir / "base_prompt.json"
+            if base_prompt_json.exists():
+                prompt_file = base_prompt_json
         
-        with open(prompt_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-            import re
-            match = re.search(r'agent_system_prompt = """([\s\S]*?)"""', content)
-            if match:
-                prompt = match.group(1).strip()
-                return jsonify({"success": True, "prompt": prompt})
+        # Compatibility: Try old Python format if JSON doesn't exist
+        if not prompt_file or not prompt_file.exists():
+            mode_prompt_py = prompts_dir / f"{mode}_prompt.py"
+            if mode_prompt_py.exists():
+                prompt_file = mode_prompt_py
             else:
-                return jsonify({"success": False, "error": "Could not extract prompt"}), 500
+                base_prompt_py = prompts_dir / "base_prompt.py"
+                if base_prompt_py.exists():
+                    prompt_file = base_prompt_py
+        
+        if not prompt_file or not prompt_file.exists():
+            # Return default prompt if no file exists
+            from prompts.agent_prompt import agent_system_prompt
+            return jsonify({"success": True, "prompt": agent_system_prompt.strip()})
+        
+        # Read JSON format
+        if prompt_file.suffix == '.json':
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                prompt_data = json.load(f)
+                prompt = prompt_data.get('prompt', '').strip()
+                if prompt:
+                    return jsonify({"success": True, "prompt": prompt})
+        
+        # Read old Python format (for compatibility)
+        if prompt_file.suffix == '.py':
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                import re
+                # Try to match the prompt pattern
+                match = re.search(r'agent_system_prompt = """([\s\S]*?)"""', content)
+                if match:
+                    prompt = match.group(1).strip()
+                    return jsonify({"success": True, "prompt": prompt})
+                else:
+                    # If pattern doesn't match, try to extract from triple quotes
+                    match = re.search(r'"""([\s\S]*?)"""', content)
+                    if match:
+                        prompt = match.group(1).strip()
+                        return jsonify({"success": True, "prompt": prompt})
+        
+        # Return default prompt if extraction fails
+        from prompts.agent_prompt import agent_system_prompt
+        return jsonify({"success": True, "prompt": agent_system_prompt.strip()})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        import traceback
+        print(f"Error getting prompt: {e}")
+        print(traceback.format_exc())
+        # Return default prompt on error
+        try:
+            from prompts.agent_prompt import agent_system_prompt
+            return jsonify({"success": True, "prompt": agent_system_prompt.strip()})
+        except:
+            return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/strategies/<strategy_id>/prompt/<mode>', methods=['POST', 'PUT'])
 def save_strategy_prompt(strategy_id, mode):
@@ -262,14 +321,29 @@ def save_strategy_prompt(strategy_id, mode):
         prompts_dir = strategy_dir / "prompts"
         prompts_dir.mkdir(parents=True, exist_ok=True)
         
-        prompt_file = prompts_dir / f"{mode}_prompt.py"
-        python_code = f'''agent_system_prompt = """\n{prompt_text}\n"""'''
+        # Save as JSON format
+        prompt_file = prompts_dir / f"{mode}_prompt.json"
+        
+        # Load existing prompt config if exists, or create new
+        prompt_config = {}
+        if prompt_file.exists():
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                prompt_config = json.load(f)
+        
+        # Update prompt and metadata
+        prompt_config['prompt'] = prompt_text
+        prompt_config['updated_at'] = datetime.now().isoformat()
+        if 'created_at' not in prompt_config:
+            prompt_config['created_at'] = datetime.now().isoformat()
         
         with open(prompt_file, 'w', encoding='utf-8') as f:
-            f.write(python_code)
+            json.dump(prompt_config, f, indent=2, ensure_ascii=False)
         
         return jsonify({"success": True, "message": "Prompt saved successfully"})
     except Exception as e:
+        import traceback
+        print(f"Error saving prompt: {e}")
+        print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/services/status', methods=['GET'])
@@ -387,6 +461,21 @@ def get_strategy_status(strategy_id, mode):
         status = run_manager.check_run_status(strategy_id, mode)
         return jsonify({"success": True, "status": status})
     except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/strategies/<strategy_id>/stop/<mode>', methods=['POST'])
+def stop_strategy(strategy_id, mode):
+    """Stop a running strategy"""
+    try:
+        if mode not in ["backtest", "simulate", "real"]:
+            return jsonify({"success": False, "error": "Invalid mode"}), 400
+        
+        result = run_manager.stop_strategy(strategy_id, mode)
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        print(f"Error stopping strategy: {e}")
+        print(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/strategies/<strategy_id>/logs/<mode>/<date>', methods=['GET'])
