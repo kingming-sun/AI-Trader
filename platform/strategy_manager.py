@@ -70,7 +70,7 @@ class StrategyManager:
             "models": [
                 {
                     "name": "deepseek-chat-v3.1",
-                    "basemodel": "deepseek/deepseek-chat-v3.1",
+                    "basemodel": "deepseek-chat",
                     "signature": "deepseek-chat-v3.1",
                     "enabled": True
                 }
