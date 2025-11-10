@@ -68,4 +68,5 @@ dmypy.json
 
 # JSON 文件
 *.json
-
+*.jsonl
+*.jsonc
