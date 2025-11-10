@@ -367,11 +367,31 @@ class RunManager:
                             if asset_data and len(asset_data) > 0:
                                 initial_value = asset_data[0].get("total_value", initial_cash)
                                 current_value = asset_data[-1].get("total_value", initial_value)
+                                total_return = ((current_value - initial_value) / initial_value) * 100
+                                
+                                # Calculate max drawdown
+                                max_drawdown = 0.0
+                                peak_value = initial_value
+                                for point in asset_data:
+                                    value = point.get("total_value", initial_value)
+                                    if value > peak_value:
+                                        peak_value = value
+                                    drawdown = ((peak_value - value) / peak_value) * 100
+                                    if drawdown > max_drawdown:
+                                        max_drawdown = drawdown
+                                
+                                # Count unique trading days
+                                unique_dates = set(point.get("date", "") for point in asset_data if point.get("date"))
+                                trading_days = len(unique_dates)
+                                
                                 results["metrics"] = {
                                     "initial_value": initial_value,
                                     "current_value": current_value,
-                                    "total_return": ((current_value - initial_value) / initial_value) * 100,
+                                    "total_return": total_return,
+                                    "max_drawdown": max_drawdown,
+                                    "sharpe_ratio": 0.0,  # TODO: Calculate Sharpe ratio from daily returns
                                     "num_trades": len(asset_data) - 1,
+                                    "trading_days": trading_days,
                                     "start_date": asset_data[0].get("date"),
                                     "end_date": asset_data[-1].get("date")
                                 }

@@ -185,6 +185,11 @@ class StrategyDetail {
                         this.updateRunStatusDisplay(status, this.currentMode);
                     } else {
                         console.log(`ℹ️  Strategy is not running (status: ${status.status})`);
+                        // Show status container even if not running (to display progress bar persistently)
+                        const container = document.getElementById('runStatusContainer');
+                        if (container && (status.progress !== undefined || status.status === 'completed' || status.status === 'stopped')) {
+                            container.style.display = 'block';
+                        }
                         // Still update display to show the current state
                         this.updateRunStatusDisplay(status, this.currentMode);
                     }
@@ -656,7 +661,7 @@ class StrategyDetail {
                     totalReturn: results.metrics.total_return || 0,
                     maxDrawdown: results.metrics.max_drawdown || 0,
                     sharpeRatio: results.metrics.sharpe_ratio || 0,
-                    tradingDays: results.metrics.num_trades || results.metrics.trading_days || 1
+                    tradingDays: results.metrics.trading_days || results.metrics.num_trades || 1
                 };
                 this.updateAssetMetrics(metrics);
             } else if (results.asset_evolution && results.asset_evolution.length > 0) {
@@ -666,18 +671,24 @@ class StrategyDetail {
                 const currentValue = evolution[evolution.length - 1].total_value || initialValue;
                 const totalReturn = ((currentValue - initialValue) / initialValue) * 100;
                 
-                // Calculate max drawdown
+                // Calculate max drawdown (corrected logic)
                 let maxDrawdown = 0;
                 let peak = evolution[0].total_value;
                 for (const point of evolution) {
-                    if (point.total_value > peak) {
-                        peak = point.total_value;
+                    const value = point.total_value || peak;
+                    if (value > peak) {
+                        peak = value;
                     }
-                    const drawdown = ((point.total_value - peak) / peak) * 100;
-                    if (drawdown < maxDrawdown) {
+                    // Drawdown is positive when value is below peak
+                    const drawdown = ((peak - value) / peak) * 100;
+                    if (drawdown > maxDrawdown) {
                         maxDrawdown = drawdown;
                     }
                 }
+                
+                // Count unique trading days
+                const uniqueDates = new Set(evolution.map(point => point.date).filter(date => date));
+                const tradingDays = uniqueDates.size || evolution.length || 1;
                 
                 this.updateAssetMetrics({
                     initialValue: initialValue || 10000,
@@ -685,7 +696,7 @@ class StrategyDetail {
                     totalReturn: totalReturn || 0,
                     maxDrawdown: maxDrawdown || 0,
                     sharpeRatio: 0, // TODO: Calculate Sharpe ratio
-                    tradingDays: evolution.length || 1
+                    tradingDays: tradingDays
                 });
             } else {
                 // Use placeholder data if no real data
@@ -1647,8 +1658,14 @@ class StrategyDetail {
         const progressFill = document.getElementById('runProgressFill');
         const logContent = document.getElementById('runLogContent');
         const stopBtn = document.getElementById('stopRunBtn');
+        const container = document.getElementById('runStatusContainer');
         
         if (!statusIcon || !statusText || !statusMessage) return;
+        
+        // Always show container if there's progress information (persistent progress bar)
+        if (container && (status.progress !== undefined || status.is_running || status.status === 'completed' || status.status === 'stopped')) {
+            container.style.display = 'block';
+        }
         
         const modeText = mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘';
         
@@ -1741,13 +1758,8 @@ class StrategyDetail {
                 stopBtn.style.display = 'none';
             }
             
-            // Hide status container after 3 seconds
-            setTimeout(() => {
-                const container = document.getElementById('runStatusContainer');
-                if (container) {
-                    container.style.display = 'none';
-                }
-            }, 3000);
+            // Keep status container visible (progress bar should be persistent)
+            // Removed auto-hide logic to keep progress bar always visible
         } else if (status.status === 'stopped') {
             // Stopped state with partial progress
             statusIcon.textContent = '⏸️';
@@ -1794,11 +1806,20 @@ class StrategyDetail {
             statusMessage.textContent = status.message || '策略未启动';
             
             if (progressFill) {
-                progressFill.style.width = '0%';
+                // Show progress if available, otherwise show 0%
+                const progress = status.progress || 0;
+                progressFill.style.width = `${progress}%`;
+                progressFill.style.animation = 'none';
             }
             
             if (stopBtn) {
                 stopBtn.style.display = 'none';
+            }
+            
+            // Keep container visible to show progress bar persistently
+            const container = document.getElementById('runStatusContainer');
+            if (container && status.progress !== undefined && status.progress > 0) {
+                container.style.display = 'block';
             }
         }
     }
