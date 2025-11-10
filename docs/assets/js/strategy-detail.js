@@ -1137,16 +1137,41 @@ class StrategyDetail {
             
             // Render holdings table with real data
             if (portfolio.holdings) {
-                this.renderHoldingsTable(portfolio.holdings);
+                // Convert backend format to frontend format
+                // Filter out holdings with 0 shares and sort by market value (descending)
+                const convertedHoldings = portfolio.holdings
+                    .filter(h => h.shares && h.shares > 0) // Only show holdings with shares > 0
+                    .map(h => ({
+                        symbol: h.symbol,
+                        shares: h.shares || 0,
+                        cost: h.avg_cost || h.cost || 0,
+                        current: h.current_price || h.current || 0,
+                        pnl: h.profit_loss || h.pnl || 0,
+                        pnlPercent: h.profit_loss_rate || h.pnlPercent || 0,
+                        marketValue: h.market_value || (h.shares * (h.current_price || h.current || 0))
+                    }))
+                    .sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0)); // Sort by market value descending
+                
+                console.log(`📊 Portfolio holdings: ${convertedHoldings.length} stocks`, convertedHoldings);
+                this.renderHoldingsTable(convertedHoldings);
             } else if (portfolio.positions) {
-                this.renderHoldingsTable(portfolio.positions);
+                // Convert positions format if needed
+                const convertedHoldings = portfolio.positions.map(h => ({
+                    symbol: h.symbol,
+                    shares: h.shares || 0,
+                    cost: h.avg_cost || h.cost || 0,
+                    current: h.current_price || h.current || 0,
+                    pnl: h.profit_loss || h.pnl || 0,
+                    pnlPercent: h.profit_loss_rate || h.pnlPercent || 0
+                }));
+                this.renderHoldingsTable(convertedHoldings);
             } else {
                 this.showEmptyPortfolioState();
             }
             
             // Render allocation chart
             if (portfolio.allocations || portfolio.holdings) {
-                this.renderAllocationChart(portfolio.allocations || portfolio.holdings);
+                this.renderAllocationChart(portfolio.allocations || portfolio.holdings, portfolio.cash);
             }
         } catch (error) {
             console.error('Error loading portfolio data:', error);
@@ -1206,25 +1231,36 @@ class StrategyDetail {
             ];
         }
         
-        tbody.innerHTML = holdings.map(h => `
+        tbody.innerHTML = holdings.map(h => {
+            // Ensure all values are numbers and handle undefined/null
+            const symbol = h.symbol || '';
+            const shares = Number(h.shares) || 0;
+            const cost = Number(h.cost) || 0;
+            const current = Number(h.current) || 0;
+            const marketValue = shares * current;
+            const pnl = Number(h.pnl) || 0;
+            const pnlPercent = Number(h.pnlPercent) || 0;
+            
+            return `
             <tr>
-                <td style="color: var(--accent-blue); font-weight: 700;">${h.symbol}</td>
-                <td>${h.shares}</td>
-                <td>$${h.cost.toFixed(2)}</td>
-                <td>$${h.current.toFixed(2)}</td>
-                <td>$${(h.shares * h.current).toLocaleString()}</td>
-                <td class="${h.pnl >= 0 ? 'positive' : 'negative'}">
-                    ${h.pnl >= 0 ? '+' : ''}$${h.pnl.toLocaleString()}
+                <td style="color: var(--accent-blue); font-weight: 700;">${symbol}</td>
+                <td>${shares}</td>
+                <td>$${cost.toFixed(2)}</td>
+                <td>$${current.toFixed(2)}</td>
+                <td>$${marketValue.toLocaleString()}</td>
+                <td class="${pnl >= 0 ? 'positive' : 'negative'}">
+                    ${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString()}
                 </td>
-                <td class="${h.pnlPercent >= 0 ? 'positive' : 'negative'}">
-                    ${h.pnlPercent >= 0 ? '+' : ''}${h.pnlPercent.toFixed(2)}%
+                <td class="${pnlPercent >= 0 ? 'positive' : 'negative'}">
+                    ${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     // Render allocation chart
-    renderAllocationChart() {
+    renderAllocationChart(holdings = null, cash = 0) {
         const ctx = document.getElementById('allocationChart');
         if (!ctx) return;
         
@@ -1233,18 +1269,44 @@ class StrategyDetail {
             this.allocationChart.destroy();
         }
         
+        // Use real data or sample data
+        let labels = [];
+        let data = [];
+        let colors = [];
+        
+        if (holdings && Array.isArray(holdings) && holdings.length > 0) {
+            // Use real data from portfolio
+            holdings.forEach((h, index) => {
+                if (h.symbol && (h.market_value || (h.shares && h.current_price))) {
+                    labels.push(h.symbol);
+                    const marketValue = h.market_value || (h.shares * (h.current_price || h.current || 0));
+                    data.push(marketValue);
+                    // Generate colors dynamically
+                    const hue = (index * 137.508) % 360; // Golden angle for color distribution
+                    colors.push(`hsl(${hue}, 70%, 60%)`);
+                }
+            });
+            
+            // Add cash if available
+            if (cash && cash > 0) {
+                labels.push('CASH');
+                data.push(cash);
+                colors.push('#8338ec');
+            }
+        } else {
+            // Fallback to sample data
+            labels = ['AAPL', 'GOOGL', 'MSFT', 'CASH'];
+            data = [8750, 5900, 11400, 2000];
+            colors = ['#00d4ff', '#00ffcc', '#ff006e', '#8338ec'];
+        }
+        
         this.allocationChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: ['AAPL', 'GOOGL', 'MSFT', 'CASH'],
+                labels: labels,
                 datasets: [{
-                    data: [8750, 5900, 11400, 2000],
-                    backgroundColor: [
-                        '#00d4ff',
-                        '#00ffcc',
-                        '#ff006e',
-                        '#8338ec'
-                    ],
+                    data: data,
+                    backgroundColor: colors,
                     borderWidth: 2,
                     borderColor: '#1a2238'
                 }]
