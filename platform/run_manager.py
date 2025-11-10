@@ -739,8 +739,8 @@ class RunManager:
                             with open(position_file, 'r', encoding='utf-8') as f:
                                 lines = f.readlines()
                                 
-                                # Only count dates within the configured date range
-                                processed_dates_in_range = []
+                                # Only count unique dates within the configured date range
+                                processed_dates_in_range = set()  # Use set to avoid duplicates
                                 for line in lines:
                                     if not line.strip():
                                         continue
@@ -751,7 +751,7 @@ class RunManager:
                                             pos_date = datetime.strptime(pos_date_str, "%Y-%m-%d")
                                             # Only count dates within the configured range
                                             if start_date <= pos_date <= end_date:
-                                                processed_dates_in_range.append(pos_date_str)
+                                                processed_dates_in_range.add(pos_date_str)  # Use add() for set
                                     except:
                                         continue
                                 
@@ -759,13 +759,14 @@ class RunManager:
                                 
                                 # Get the latest date within the range
                                 if processed_dates_in_range:
-                                    # Sort dates to get the latest one
-                                    sorted_dates = sorted(processed_dates_in_range)
+                                    # Sort dates to get the latest one (convert set to list for sorting)
+                                    sorted_dates = sorted(list(processed_dates_in_range))
                                     progress_info["current_date"] = sorted_dates[-1]
                         
-                        # Calculate progress
+                        # Calculate progress (cap at 100% to avoid showing > 100%)
                         if progress_info["total_dates"] > 0:
-                            progress_info["progress"] = int((progress_info["processed_dates"] / progress_info["total_dates"]) * 100)
+                            progress = int((progress_info["processed_dates"] / progress_info["total_dates"]) * 100)
+                            progress_info["progress"] = min(progress, 100)  # Cap at 100%
             
             # Get latest log entry (pass strategy_id and mode for better reliability)
             progress_info["latest_log"] = self._get_latest_log_entry(data_path, strategy_id, mode)

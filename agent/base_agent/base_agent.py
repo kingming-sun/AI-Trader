@@ -266,14 +266,7 @@ class BaseAgent:
                 # Extract agent response
                 agent_response = extract_conversation(response, "final")
                 
-                # Check stop signal
-                if STOP_SIGNAL in agent_response:
-                    print("✅ Received stop signal, trading session ended")
-                    print(agent_response)
-                    self._log_message(log_file, [{"role": "assistant", "content": agent_response}])
-                    break
-                
-                # Extract tool messages
+                # Extract tool messages (do this before checking stop signal to ensure we log tool calls)
                 tool_msgs = extract_tool_messages(response)
                 tool_response = '\n'.join([msg.content for msg in tool_msgs])
                 
@@ -286,8 +279,16 @@ class BaseAgent:
                 # Add new messages
                 message.extend(new_messages)
                 
-                # Log messages (ensure we pass a list, not individual items)
-                self._log_message(log_file, new_messages)
+                # Log messages (log each message separately for better readability)
+                self._log_message(log_file, [new_messages[0]])  # Log assistant response
+                if tool_response:  # Only log tool results if there are any
+                    self._log_message(log_file, [new_messages[1]])  # Log tool results
+                
+                # Check stop signal after logging
+                if STOP_SIGNAL in agent_response:
+                    print("✅ Received stop signal, trading session ended")
+                    print(agent_response)
+                    break
                 
             except Exception as e:
                 print(f"❌ Trading session error: {str(e)}")
