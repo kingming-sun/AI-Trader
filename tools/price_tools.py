@@ -477,7 +477,7 @@ def add_no_trade_record(today_date: str, modelname: str):
     position_file.parent.mkdir(parents=True, exist_ok=True)
     
     with position_file.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(save_item) + "\n")
+        f.write(json.dumps(save_item, ensure_ascii=False) + "\n")
     return 
 
 if __name__ == "__main__":

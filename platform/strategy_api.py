@@ -463,6 +463,24 @@ def get_strategy_status(strategy_id, mode):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/strategies/<strategy_id>/status', methods=['PUT'])
+def update_strategy_status(strategy_id):
+    """Update strategy status"""
+    try:
+        data = request.get_json()
+        new_status = data.get('status')
+        
+        if not new_status:
+            return jsonify({"success": False, "error": "Status not provided"}), 400
+        
+        if new_status not in ["design", "backtest", "simulate", "real"]:
+            return jsonify({"success": False, "error": "Invalid status"}), 400
+        
+        strategy_manager.update_strategy_status(strategy_id, new_status)
+        return jsonify({"success": True, "message": "Status updated successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/strategies/<strategy_id>/stop/<mode>', methods=['POST'])
 def stop_strategy(strategy_id, mode):
     """Stop a running strategy"""

@@ -59,6 +59,7 @@ class StrategyManager {
         const classes = {
             'design': 'status-design',
             'backtest': 'status-backtest',
+            'backtest_completed': 'status-backtest-completed',
             'simulate': 'status-simulate',
             'real': 'status-real'
         };
@@ -69,6 +70,7 @@ class StrategyManager {
         const texts = {
             'design': '设计中',
             'backtest': '回测中',
+            'backtest_completed': '回测结束',
             'simulate': '模拟中',
             'real': '实盘中'
         };
@@ -105,6 +107,36 @@ class StrategyManager {
         }
     }
 
+    async checkBacktestStatus(strategyId) {
+        /**检查策略的回测状态*/
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${strategyId}/status/backtest`);
+            if (!response.ok) {
+                return null;
+            }
+            const data = await response.json();
+            return data.status;
+        } catch (error) {
+            console.error(`Error checking backtest status for ${strategyId}:`, error);
+            return null;
+        }
+    }
+
+    async updateStrategyStatus(strategyId, newStatus) {
+        /**更新策略状态*/
+        try {
+            const response = await fetch(`${this.apiBase}/api/strategies/${strategyId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            return response.ok;
+        } catch (error) {
+            console.error(`Error updating strategy status for ${strategyId}:`, error);
+            return false;
+        }
+    }
+
 }
 
 const strategyManager = new StrategyManager();
@@ -123,15 +155,45 @@ async function loadStrategies() {
         return;
     }
     
-    container.innerHTML = strategies.map(strategy => `
+    // 检查每个策略的回测状态，动态确定显示状态
+    // 使用与策略详情页面相同的判断逻辑
+    const strategiesWithStatus = await Promise.all(strategies.map(async (strategy) => {
+        let displayStatus = strategy.status;
+        
+        // 检查回测状态（与策略详情页面使用相同的API和判断逻辑）
+        const runStatus = await strategyManager.checkBacktestStatus(strategy.strategy_id);
+        if (runStatus) {
+            // 使用与策略详情页面完全相同的判断逻辑
+            if (runStatus.status === 'completed') {
+                // 回测已完成，显示"回测结束"
+                displayStatus = 'backtest_completed';
+            } else if (runStatus.status === 'failed') {
+                // 回测失败，也显示"回测结束"
+                displayStatus = 'backtest_completed';
+            } else if (runStatus.is_running) {
+                // 回测正在运行，显示"回测中"
+                displayStatus = 'backtest';
+            } else if (runStatus.status === 'stopped' && runStatus.progress > 0) {
+                // 回测已暂停但有进度，保持"回测中"状态
+                displayStatus = 'backtest';
+            } else if (strategy.status === 'backtest') {
+                // 如果策略状态是"回测中"但回测未运行，保持原状态
+                displayStatus = 'backtest';
+            }
+        }
+        
+        return { ...strategy, displayStatus };
+    }));
+    
+    container.innerHTML = strategiesWithStatus.map(strategy => `
         <div class="strategy-card">
             <div class="strategy-card-header">
                 <div>
                     <h4 style="margin: 0 0 0.5rem 0;">${strategy.strategy_name}</h4>
                     <p style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">${strategy.description || '无描述'}</p>
                 </div>
-                <span class="strategy-status ${strategyManager.getStatusClass(strategy.status)}">
-                    ${strategyManager.getStatusText(strategy.status)}
+                <span class="strategy-status ${strategyManager.getStatusClass(strategy.displayStatus)}">
+                    ${strategyManager.getStatusText(strategy.displayStatus)}
                 </span>
             </div>
             <div style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">
@@ -190,9 +252,95 @@ document.getElementById('createStrategyBtn')?.addEventListener('click', async ()
     }
 });
 
+// 状态检查相关变量
+let statusCheckInterval = null;
+let strategiesToCheck = new Set(); // 需要检查回测状态的策略ID集合
+
+// 检查并更新策略状态
+async function checkAndUpdateStrategyStatuses() {
+    const strategies = await strategyManager.listStrategies();
+    const backtestStrategies = strategies.filter(s => s.status === 'backtest');
+    
+    // 更新需要检查的策略集合（包括所有状态为"回测中"的策略）
+    backtestStrategies.forEach(s => strategiesToCheck.add(s.strategy_id));
+    
+    // 如果没有需要检查的策略，清理集合
+    if (strategiesToCheck.size === 0 && backtestStrategies.length === 0) {
+        return;
+    }
+    
+    let needsReload = false;
+    
+    // 检查每个需要检查的策略
+    const strategiesToRemove = [];
+    for (const strategyId of strategiesToCheck) {
+        const runStatus = await strategyManager.checkBacktestStatus(strategyId);
+        
+        if (runStatus) {
+            // 如果回测已完成或失败，保持状态为"backtest"（前端会显示为"回测结束"）
+            if (runStatus.status === 'completed' || runStatus.status === 'failed') {
+                // 不需要更新状态，保持为"backtest"，前端会根据回测状态显示"回测结束"
+                strategiesToRemove.push(strategyId);
+                needsReload = true;
+            } else if (!runStatus.is_running && runStatus.status !== 'stopped' && runStatus.status !== 'not_started') {
+                // 如果回测已停止且不是暂停状态，保持状态为"backtest"
+                strategiesToRemove.push(strategyId);
+                needsReload = true;
+            } else if (runStatus.is_running) {
+                // 如果回测正在运行，确保策略状态是"回测中"（后端启动时会自动设置，这里只是同步）
+                const strategy = strategies.find(s => s.strategy_id === strategyId);
+                if (strategy && strategy.status !== 'backtest') {
+                    await strategyManager.updateStrategyStatus(strategyId, 'backtest');
+                    needsReload = true;
+                }
+            }
+        }
+    }
+    
+    // 移除已完成的策略
+    strategiesToRemove.forEach(id => strategiesToCheck.delete(id));
+    
+    // 如果有状态更新，重新加载策略列表
+    if (needsReload) {
+        await loadStrategies();
+    }
+}
+
+// 启动状态检查
+function startStatusChecking() {
+    // 每5秒检查一次回测状态
+    if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+    }
+    statusCheckInterval = setInterval(checkAndUpdateStrategyStatuses, 5000);
+}
+
+// 停止状态检查
+function stopStatusChecking() {
+    if (statusCheckInterval) {
+        clearInterval(statusCheckInterval);
+        statusCheckInterval = null;
+    }
+}
+
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('Strategy Manager initialized');
-    loadStrategies();
+    await loadStrategies();
+    // 加载策略后，识别正在回测的策略
+    const strategies = await strategyManager.listStrategies();
+    const backtestStrategies = strategies.filter(s => s.status === 'backtest');
+    backtestStrategies.forEach(s => strategiesToCheck.add(s.strategy_id));
+    
+    // 立即检查一次所有策略的状态（包括可能已完成但状态未更新的）
+    await checkAndUpdateStrategyStatuses();
+    
+    // 开始定期检查
+    startStatusChecking();
+});
+
+// 页面卸载时停止检查
+window.addEventListener('beforeunload', () => {
+    stopStatusChecking();
 });
 

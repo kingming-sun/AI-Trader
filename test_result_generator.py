@@ -45,7 +45,7 @@ position_file = position_dir / "position.jsonl"
 
 with open(position_file, 'w') as f:
     for pos in test_positions:
-        f.write(json.dumps(pos) + "\n")
+        f.write(json.dumps(pos, ensure_ascii=False) + "\n")
 
 print(f"📝 Created test data with {len(test_positions)} position records")
 

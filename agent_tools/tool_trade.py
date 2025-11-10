@@ -101,8 +101,8 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
             os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
             
             with open(position_file_path, "a") as f:
-                print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position})}")
-                f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"buy","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}) + "\n")
+                print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position}, ensure_ascii=False)}")
+                f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"buy","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}, ensure_ascii=False) + "\n")
             
             write_config_value("IF_TRADE", True)
             print(f"✅ Real buy order executed successfully: Order ID {result.get('order_id')}")
@@ -169,8 +169,8 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
         
         with open(position_file_path, "a") as f:
             # Write JSON format transaction record, containing date, operation ID, transaction details and updated position
-            print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount},'positions': new_position})}")
-            f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"buy","symbol":symbol,"amount":amount},"positions": new_position}) + "\n")
+            print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount},'positions': new_position}, ensure_ascii=False)}")
+            f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"buy","symbol":symbol,"amount":amount},"positions": new_position}, ensure_ascii=False) + "\n")
         # Step 7: Return updated position
         write_config_value("IF_TRADE", True)
         print("IF_TRADE", get_config_value("IF_TRADE"))
@@ -252,8 +252,8 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
             os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
             
             with open(position_file_path, "a") as f:
-                print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position})}")
-                f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"sell","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}) + "\n")
+                print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position}, ensure_ascii=False)}")
+                f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"sell","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}, ensure_ascii=False) + "\n")
             
             write_config_value("IF_TRADE", True)
             print(f"✅ Real sell order executed successfully: Order ID {result.get('order_id')}")
@@ -314,8 +314,8 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
     
     with open(position_file_path, "a") as f:
         # Write JSON format transaction record, containing date, operation ID and updated position
-        print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount},'positions': new_position})}")
-        f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"sell","symbol":symbol,"amount":amount},"positions": new_position}) + "\n")
+        print(f"Writing to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount},'positions': new_position}, ensure_ascii=False)}")
+        f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"sell","symbol":symbol,"amount":amount},"positions": new_position}, ensure_ascii=False) + "\n")
 
     # Step 7: Return updated position
     write_config_value("IF_TRADE", True)

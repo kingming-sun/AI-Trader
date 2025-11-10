@@ -261,7 +261,7 @@ class RunManager:
                 "config_file": str(config_file),
                 "start_time": time.time(),
                 "status": "running"
-            }, f, indent=2)
+            }, f, indent=2, ensure_ascii=False)
         
         # Clean up old progress file if exists
         progress_file = strategy_log_dir / f"{strategy_id}_{mode}_progress.json"
@@ -519,6 +519,10 @@ class RunManager:
             results = self.get_run_results(strategy_id, mode)
             
             if results:
+                # 回测已完成，保持策略状态为"backtest"（前端会根据回测状态显示"回测结束"）
+                if mode == "backtest":
+                    print(f"✅ 回测已完成，策略 {strategy_id} 回测结束")
+                
                 return {
                     "is_running": False,
                     "status": "completed",
@@ -942,7 +946,7 @@ class RunManager:
             
             # Save progress for persistence
             with open(progress_file, 'w', encoding='utf-8') as f:
-                json.dump(progress_info, f, indent=2)
+                json.dump(progress_info, f, indent=2, ensure_ascii=False)
             
             return progress_info
             
