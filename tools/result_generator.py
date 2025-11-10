@@ -150,11 +150,31 @@ def generate_asset_evolution(positions: List[Dict[str, Any]], initial_cash: floa
             cash = position.get("CASH", last_valid_cash)
             last_valid_cash = cash
             
-            # Calculate stock value (simplified - using placeholder prices)
+            # Calculate stock value using actual closing prices
             stock_value = 0
-            for symbol, shares in position.items():
-                if symbol != "CASH" and shares > 0:
-                    stock_value += shares * 100  # Placeholder price
+            symbols_with_shares = [symbol for symbol, shares in position.items() 
+                                  if symbol != "CASH" and shares > 0]
+            
+            if symbols_with_shares:
+                # Get closing prices for all symbols with holdings
+                try:
+                    prices = get_close_prices(date, symbols_with_shares)
+                    # Fallback to open prices if close prices not available
+                    if not prices or all(v is None for v in prices.values()):
+                        prices = get_open_prices(date, symbols_with_shares)
+                except Exception as e:
+                    print(f"⚠️  Warning: Could not get prices for {date}: {e}")
+                    prices = {}
+                
+                for symbol, shares in position.items():
+                    if symbol != "CASH" and shares > 0:
+                        price_key = f'{symbol}_price'
+                        price = prices.get(price_key)
+                        if price is not None:
+                            stock_value += shares * price
+                        else:
+                            # If price not available, skip this symbol (or use last known value)
+                            print(f"⚠️  Warning: Price not available for {symbol} on {date}, skipping from value calculation")
             last_valid_stock_value = stock_value
         else:
             # Use last valid values if current position is empty

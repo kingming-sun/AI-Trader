@@ -177,6 +177,12 @@ class StrategyDetail {
                 console.log('📊 Run status response:', data);
                 if (data.success && data.status) {
                     const status = data.status;
+                    
+                    // Update backtest buttons visibility based on status
+                    if (this.currentMode === 'backtest' && this.currentTab === 'asset') {
+                        this.updateBacktestButtonsByStatus(status);
+                    }
+                    
                     if (status.is_running) {
                         console.log('✅ Strategy is running, starting status monitoring...');
                         this.showRunStatus(this.currentMode);
@@ -382,6 +388,8 @@ class StrategyDetail {
     // Update run button visibility based on asset mode (for asset tab)
     updateAssetRunButtonsVisibility() {
         const runBacktestBtn = document.getElementById('runBacktestBtn');
+        const stopBacktestBtn = document.getElementById('stopBacktestBtn');
+        const resumeBacktestBtn = document.getElementById('resumeBacktestBtn');
         const runSimulateBtn = document.getElementById('runSimulateBtn');
         const runRealBtn = document.getElementById('runRealBtn');
         const buttonHint = document.getElementById('buttonHint');
@@ -396,12 +404,16 @@ class StrategyDetail {
             backtestDateConfig: !!backtestDateConfig,
             realtimeConfig: !!realtimeConfig,
             runBacktestBtn: !!runBacktestBtn,
+            stopBacktestBtn: !!stopBacktestBtn,
+            resumeBacktestBtn: !!resumeBacktestBtn,
             runSimulateBtn: !!runSimulateBtn,
             runRealBtn: !!runRealBtn
         });
         
         // Hide all buttons first
         if (runBacktestBtn) runBacktestBtn.style.display = 'none';
+        if (stopBacktestBtn) stopBacktestBtn.style.display = 'none';
+        if (resumeBacktestBtn) resumeBacktestBtn.style.display = 'none';
         if (runSimulateBtn) runSimulateBtn.style.display = 'none';
         if (runRealBtn) runRealBtn.style.display = 'none';
         
@@ -1420,12 +1432,16 @@ class StrategyDetail {
             this.runStrategy('real');
         });
         
-        // Stop run button
-        document.getElementById('stopRunBtn')?.addEventListener('click', () => {
+        // Stop and resume backtest buttons (in asset tab)
+        document.getElementById('stopBacktestBtn')?.addEventListener('click', () => {
             this.stopRun();
         });
         
-        // Resume run button
+        document.getElementById('resumeBacktestBtn')?.addEventListener('click', () => {
+            this.resumeRun();
+        });
+        
+        // Resume run button (in status container)
         document.getElementById('resumeRunBtn')?.addEventListener('click', () => {
             this.resumeRun();
         });
@@ -1619,6 +1635,20 @@ class StrategyDetail {
             // Show status container and start monitoring
             this.showRunStatus(mode);
             this.startStatusMonitoring(mode);
+            
+            // Update backtest buttons if in backtest mode
+            if (mode === 'backtest') {
+                // Wait a moment for status to update, then check and update buttons
+                setTimeout(async () => {
+                    const statusResponse = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/status/${mode}`);
+                    if (statusResponse.ok) {
+                        const statusData = await statusResponse.json();
+                        if (statusData.success && statusData.status) {
+                            this.updateBacktestButtonsByStatus(statusData.status);
+                        }
+                    }
+                }, 1000);
+            }
         } catch (error) {
             console.error(`Error running ${mode}:`, error);
             alert(`❌ 启动${mode === 'backtest' ? '回测' : mode === 'simulate' ? '模拟盘' : '实盘'}失败：${error.message}`);
@@ -1637,13 +1667,6 @@ class StrategyDetail {
         document.getElementById('runStatusText').textContent = `${modeText}运行中...`;
         document.getElementById('runStatusIcon').textContent = '⏳';
         document.getElementById('runStatusMessage').textContent = '正在启动策略...';
-        
-        // Show stop button when running
-        const stopBtn = document.getElementById('stopRunBtn');
-        if (stopBtn) {
-            stopBtn.style.display = 'inline-block';
-            stopBtn.style.visibility = 'visible';
-        }
         
         // Hide resume button when running
         const resumeBtn = document.getElementById('resumeRunBtn');
@@ -1719,6 +1742,11 @@ class StrategyDetail {
             
             const status = data.status;
             this.updateRunStatusDisplay(status, mode);
+            
+            // Update backtest buttons visibility based on status
+            if (mode === 'backtest' && this.currentTab === 'asset') {
+                this.updateBacktestButtonsByStatus(status);
+            }
             
             // If running, update asset data in real-time (every 5 status checks = ~10 seconds)
             if (status.is_running) {
@@ -1801,6 +1829,35 @@ class StrategyDetail {
         }
     }
     
+    // Update backtest buttons visibility based on status
+    updateBacktestButtonsByStatus(status) {
+        const runBacktestBtn = document.getElementById('runBacktestBtn');
+        const stopBacktestBtn = document.getElementById('stopBacktestBtn');
+        const resumeBacktestBtn = document.getElementById('resumeBacktestBtn');
+        
+        if (status.is_running) {
+            // Running: show stop button, hide start and resume
+            if (runBacktestBtn) runBacktestBtn.style.display = 'none';
+            if (stopBacktestBtn) stopBacktestBtn.style.display = 'inline-block';
+            if (resumeBacktestBtn) resumeBacktestBtn.style.display = 'none';
+        } else if (status.status === 'stopped' && status.progress > 0) {
+            // Stopped with progress: show resume button, hide start and stop
+            if (runBacktestBtn) runBacktestBtn.style.display = 'none';
+            if (stopBacktestBtn) stopBacktestBtn.style.display = 'none';
+            if (resumeBacktestBtn) resumeBacktestBtn.style.display = 'inline-block';
+        } else if (status.status === 'completed' || status.status === 'failed') {
+            // Completed or failed: show start button, hide stop and resume
+            if (runBacktestBtn) runBacktestBtn.style.display = 'inline-block';
+            if (stopBacktestBtn) stopBacktestBtn.style.display = 'none';
+            if (resumeBacktestBtn) resumeBacktestBtn.style.display = 'none';
+        } else {
+            // Not started: show start button, hide stop and resume
+            if (runBacktestBtn) runBacktestBtn.style.display = 'inline-block';
+            if (stopBacktestBtn) stopBacktestBtn.style.display = 'none';
+            if (resumeBacktestBtn) resumeBacktestBtn.style.display = 'none';
+        }
+    }
+    
     // Update run status display
     updateRunStatusDisplay(status, mode) {
         const statusIcon = document.getElementById('runStatusIcon');
@@ -1808,7 +1865,6 @@ class StrategyDetail {
         const statusMessage = document.getElementById('runStatusMessage');
         const progressFill = document.getElementById('runProgressFill');
         const logContent = document.getElementById('runLogContent');
-        const stopBtn = document.getElementById('stopRunBtn');
         const container = document.getElementById('runStatusContainer');
         
         if (!statusIcon || !statusText || !statusMessage) return;
@@ -1856,10 +1912,6 @@ class StrategyDetail {
             }
             
             const resumeBtn = document.getElementById('resumeRunBtn');
-            if (stopBtn) {
-                stopBtn.style.display = 'inline-block';
-                stopBtn.style.visibility = 'visible';
-            }
             if (resumeBtn) {
                 resumeBtn.style.display = 'none';
             }
@@ -1915,9 +1967,6 @@ class StrategyDetail {
                 progressFill.style.background = 'var(--success)';
             }
             
-            if (stopBtn) {
-                stopBtn.style.display = 'none';
-            }
             const resumeBtnCompleted = document.getElementById('resumeRunBtn');
             if (resumeBtnCompleted) {
                 resumeBtnCompleted.style.display = 'none';
@@ -1946,9 +1995,6 @@ class StrategyDetail {
                 statusMessage.textContent = msg;
             }
             
-            if (stopBtn) {
-                stopBtn.style.display = 'none';
-            }
             const resumeBtn = document.getElementById('resumeRunBtn');
             // Show resume button if there's progress to resume
             if (resumeBtn && status.progress > 0) {
@@ -1967,10 +2013,6 @@ class StrategyDetail {
                 progressFill.style.animation = 'none';
                 progressFill.style.background = 'var(--danger)';
             }
-            
-            if (stopBtn) {
-                stopBtn.style.display = 'none';
-            }
         } else {
             // Not started or unknown
             statusIcon.textContent = '⏸️';
@@ -1982,10 +2024,6 @@ class StrategyDetail {
                 const progress = status.progress || 0;
                 progressFill.style.width = `${progress}%`;
                 progressFill.style.animation = 'none';
-            }
-            
-            if (stopBtn) {
-                stopBtn.style.display = 'none';
             }
             
             // Keep container visible to show progress bar persistently
@@ -2021,8 +2059,18 @@ class StrategyDetail {
             
             if (data.success) {
                 alert(`✅ ${data.message || '策略已停止'}`);
-                // Refresh status
+                // Refresh status and update button visibility
                 await this.checkRunStatus(this.currentMode);
+                // Update backtest buttons if in backtest mode
+                if (this.currentMode === 'backtest' && this.currentTab === 'asset') {
+                    const statusResponse = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/status/${this.currentMode}`);
+                    if (statusResponse.ok) {
+                        const statusData = await statusResponse.json();
+                        if (statusData.success && statusData.status) {
+                            this.updateBacktestButtonsByStatus(statusData.status);
+                        }
+                    }
+                }
             } else {
                 alert(`❌ 停止失败：${data.error || '未知错误'}`);
             }
@@ -2054,6 +2102,19 @@ class StrategyDetail {
                 // Show status and start monitoring
                 this.showRunStatus(this.currentMode);
                 this.startStatusMonitoring(this.currentMode);
+                // Update backtest buttons if in backtest mode
+                if (this.currentMode === 'backtest' && this.currentTab === 'asset') {
+                    // Wait a moment for status to update, then check
+                    setTimeout(async () => {
+                        const statusResponse = await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/status/${this.currentMode}`);
+                        if (statusResponse.ok) {
+                            const statusData = await statusResponse.json();
+                            if (statusData.success && statusData.status) {
+                                this.updateBacktestButtonsByStatus(statusData.status);
+                            }
+                        }
+                    }, 1000);
+                }
             } else {
                 alert(`❌ 继续失败：${data.error || '未知错误'}`);
             }
