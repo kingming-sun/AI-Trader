@@ -5,9 +5,57 @@ Generates asset_evolution.json, portfolio.json, and trades.json from position.js
 """
 
 import json
+import os
+import sys
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
+
+# Add project root directory to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from tools.price_tools import get_open_prices, get_yesterday_open_and_close_price
+
+def get_close_prices(date: str, symbols: List[str]) -> Dict[str, Optional[float]]:
+    """Get closing prices (sell prices) for symbols on a specific date"""
+    import json
+    from pathlib import Path
+    
+    wanted = set(symbols)
+    results: Dict[str, Optional[float]] = {}
+    
+    base_dir = Path(__file__).resolve().parents[1]
+    merged_file = base_dir / "data" / "merged.jsonl"
+    
+    if not merged_file.exists():
+        return results
+    
+    with merged_file.open("r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                doc = json.loads(line)
+            except Exception:
+                continue
+            meta = doc.get("Meta Data", {}) if isinstance(doc, dict) else {}
+            sym = meta.get("2. Symbol")
+            if sym not in wanted:
+                continue
+            series = doc.get("Time Series (Daily)", {})
+            if not isinstance(series, dict):
+                continue
+            bar = series.get(date)
+            if isinstance(bar, dict):
+                sell_val = bar.get("4. sell price")  # Closing price
+                try:
+                    results[f'{sym}_price'] = float(sell_val) if sell_val is not None else None
+                except Exception:
+                    results[f'{sym}_price'] = None
+    
+    return results
 
 
 def load_position_data(log_path: str) -> List[Dict[str, Any]]:
@@ -102,8 +150,72 @@ def generate_asset_evolution(positions: List[Dict[str, Any]], initial_cash: floa
     return asset_evolution
 
 
+def calculate_avg_cost(positions: List[Dict[str, Any]], symbol: str, current_shares: int) -> Optional[float]:
+    """Calculate average cost price for a symbol from trade history using weighted average method"""
+    # Track position history: (shares, avg_cost)
+    # When buying: add to position with new average cost
+    # When selling: reduce shares but keep same average cost
+    position_shares = 0
+    position_cost = 0.0  # Total cost basis
+    
+    for pos_data in positions:
+        this_action = pos_data.get("this_action")
+        if not this_action:
+            continue
+            
+        action = this_action.get("action")
+        action_symbol = this_action.get("symbol")
+        
+        if action_symbol != symbol:
+            continue
+            
+        trade_date = pos_data.get("date")
+        if not trade_date:
+            continue
+        
+        try:
+            prices = get_open_prices(trade_date, [symbol])
+            trade_price = prices.get(f'{symbol}_price')
+            
+            if trade_price is None:
+                continue
+                
+            amount = this_action.get("amount", 0)
+            
+            if action == "buy":
+                # Calculate new average cost: (old_total_cost + new_cost) / (old_shares + new_shares)
+                new_cost = trade_price * amount
+                if position_shares == 0:
+                    # First purchase
+                    position_cost = new_cost
+                    position_shares = amount
+                else:
+                    # Weighted average
+                    position_cost = position_cost + new_cost
+                    position_shares = position_shares + amount
+            elif action == "sell":
+                # Selling reduces shares but doesn't change average cost
+                # We assume FIFO or average cost method where selling doesn't affect remaining cost basis
+                position_shares = max(0, position_shares - amount)
+                # Adjust cost basis proportionally
+                if position_shares > 0:
+                    # Keep the same average cost per share
+                    position_cost = (position_cost / (position_shares + amount)) * position_shares
+                else:
+                    position_cost = 0.0
+        except Exception as e:
+            # If price lookup fails, skip this trade
+            print(f"⚠️  Warning: Could not get price for {symbol} on {trade_date}: {e}")
+            continue
+    
+    if position_shares > 0:
+        avg_cost = position_cost / position_shares
+        return avg_cost
+    return None
+
+
 def generate_portfolio(positions: List[Dict[str, Any]], initial_cash: float = 10000) -> Dict[str, Any]:
-    """Generate portfolio data from latest position"""
+    """Generate portfolio data from latest position with actual prices"""
     if not positions:
         return {
             "date": datetime.now().strftime("%Y-%m-%d"),
@@ -126,30 +238,69 @@ def generate_portfolio(positions: List[Dict[str, Any]], initial_cash: float = 10
         cash = initial_cash
     total_value = cash
     
+    # Get all symbols with holdings
+    symbols_with_shares = [symbol for symbol, shares in position.items() 
+                          if symbol != "CASH" and shares > 0]
+    
+    if symbols_with_shares:
+        # Get current prices (closing prices for the latest date)
+        try:
+            # Get closing prices for the latest position date
+            current_prices = get_close_prices(date, symbols_with_shares)
+            
+            # If we can't get closing prices, try opening prices as fallback
+            if not current_prices or all(v is None for v in current_prices.values()):
+                current_prices = get_open_prices(date, symbols_with_shares)
+        except Exception as e:
+            print(f"⚠️  Warning: Could not get current prices: {e}")
+            current_prices = {}
+    
     for symbol, shares in position.items():
         if symbol != "CASH" and shares > 0:
-            # Placeholder values for demonstration
-            price = 100
-            value = shares * price
-            total_value += value
+            # Calculate average cost from trade history
+            avg_cost = calculate_avg_cost(positions, symbol, shares)
+            
+            # Get current price
+            price_key = f'{symbol}_price'
+            current_price = current_prices.get(price_key) if symbols_with_shares else None
+            
+            # Fallback to average cost if current price not available
+            if current_price is None:
+                current_price = avg_cost
+            
+            # Fallback to placeholder if both are None
+            if current_price is None:
+                current_price = 100.0
+                print(f"⚠️  Warning: Using placeholder price 100 for {symbol}")
+            
+            if avg_cost is None:
+                avg_cost = current_price  # Use current price as cost if we can't calculate
+            
+            # Calculate values
+            market_value = shares * current_price
+            total_cost = shares * avg_cost
+            profit_loss = market_value - total_cost
+            profit_loss_rate = (profit_loss / total_cost * 100) if total_cost > 0 else 0.0
+            
+            total_value += market_value
             
             holdings.append({
                 "symbol": symbol,
                 "shares": shares,
-                "avg_cost": price,  # Should track actual cost
-                "current_price": price,
-                "market_value": value,
-                "profit_loss": 0,  # Should calculate actual P&L
-                "profit_loss_rate": 0
+                "avg_cost": round(avg_cost, 2),
+                "current_price": round(current_price, 2),
+                "market_value": round(market_value, 2),
+                "profit_loss": round(profit_loss, 2),
+                "profit_loss_rate": round(profit_loss_rate, 2)
             })
     
     return {
         "date": date,
         "holdings": holdings,
         "cash": cash,
-        "total_value": total_value,
-        "stock_ratio": (total_value - cash) / total_value * 100 if total_value > 0 else 0,
-        "cash_ratio": cash / total_value * 100 if total_value > 0 else 0
+        "total_value": round(total_value, 2),
+        "stock_ratio": round((total_value - cash) / total_value * 100, 2) if total_value > 0 else 0,
+        "cash_ratio": round(cash / total_value * 100, 2) if total_value > 0 else 0
     }
 
 

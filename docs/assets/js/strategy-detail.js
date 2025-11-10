@@ -554,58 +554,73 @@ class StrategyDetail {
             }
             
             // Populate form fields (use defaults if config is null)
+            const maxStepsEl = document.getElementById('maxSteps');
+            const maxRetriesEl = document.getElementById('maxRetries');
+            const baseDelayEl = document.getElementById('baseDelay');
+            const initialCashEl = document.getElementById('initialCash');
+            
             if (config && config.agent_config) {
-                document.getElementById('maxSteps').value = config.agent_config.max_steps || 30;
-                document.getElementById('maxRetries').value = config.agent_config.max_retries || 3;
-                document.getElementById('baseDelay').value = config.agent_config.base_delay || 1.0;
-                document.getElementById('initialCash').value = config.agent_config.initial_cash || 10000;
+                if (maxStepsEl) maxStepsEl.value = config.agent_config.max_steps || 30;
+                if (maxRetriesEl) maxRetriesEl.value = config.agent_config.max_retries || 3;
+                if (baseDelayEl) baseDelayEl.value = config.agent_config.base_delay || 1.0;
+                if (initialCashEl) initialCashEl.value = config.agent_config.initial_cash || 10000;
             } else {
                 // Use defaults
-                document.getElementById('maxSteps').value = 30;
-                document.getElementById('maxRetries').value = 3;
-                document.getElementById('baseDelay').value = 1.0;
-                document.getElementById('initialCash').value = 10000;
+                if (maxStepsEl) maxStepsEl.value = 30;
+                if (maxRetriesEl) maxRetriesEl.value = 3;
+                if (baseDelayEl) baseDelayEl.value = 1.0;
+                if (initialCashEl) initialCashEl.value = 10000;
             }
             
-            // Only load date range for backtest mode
-            if (this.currentConfigMode === 'backtest') {
-                if (config && config.date_range) {
-                    document.getElementById('startDate').value = config.date_range.init_date || '';
-                    document.getElementById('endDate').value = config.date_range.end_date || '';
-                } else {
-                    document.getElementById('startDate').value = '';
-                    document.getElementById('endDate').value = '';
-                }
-            }
+            // Note: Date range is handled in asset tab, not config tab
+            // The date range inputs (assetStartDate, assetEndDate) are in the asset-tab
+            // So we don't need to set them here in config tab
             
             // Load prompt
             try {
+                // Ensure DOM element exists before loading
+                let systemPromptElement = document.getElementById('systemPrompt');
+                if (!systemPromptElement) {
+                    console.warn('⚠️ systemPrompt element not found, waiting for DOM...');
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    systemPromptElement = document.getElementById('systemPrompt');
+                    if (!systemPromptElement) {
+                        console.error('❌ systemPrompt element still not found after waiting');
+                        return;
+                    }
+                }
+                
                 const promptUrl = `${this.apiBase}/api/strategies/${this.strategyId}/prompt/${this.currentConfigMode}`;
                 console.log(`📝 Loading prompt from: ${promptUrl}`);
+                console.log(`📝 Current config mode: ${this.currentConfigMode}`);
+                
                 const promptResponse = await fetch(promptUrl);
                 if (promptResponse.ok) {
                     const promptData = await promptResponse.json();
                     console.log('📝 Prompt API response:', promptData);
+                    
                     // API returns {success: true, prompt: "..."} or {prompt: "..."}
                     const prompt = promptData.prompt || (typeof promptData === 'string' ? promptData : '');
                     console.log(`📝 Extracted prompt length: ${prompt ? prompt.length : 0}`);
-                    const systemPromptElement = document.getElementById('systemPrompt');
+                    console.log(`📝 Prompt preview (first 100 chars): ${prompt ? prompt.substring(0, 100) : 'empty'}`);
+                    
                     if (systemPromptElement) {
                         systemPromptElement.value = prompt || '';
-                        console.log('✅ Prompt loaded successfully');
+                        console.log('✅ Prompt loaded and set to textarea');
+                        console.log(`📝 Textarea value length: ${systemPromptElement.value.length}`);
                     } else {
-                        console.error('❌ systemPrompt element not found');
+                        console.error('❌ systemPrompt element not found after fetch');
                     }
                 } else {
                     const errorText = await promptResponse.text().catch(() => '');
                     console.warn('❌ Failed to load prompt:', promptResponse.status, promptResponse.statusText, errorText);
-                    const systemPromptElement = document.getElementById('systemPrompt');
                     if (systemPromptElement) {
                         systemPromptElement.value = '';
                     }
                 }
             } catch (promptError) {
                 console.error('❌ Error loading prompt:', promptError);
+                console.error('❌ Error stack:', promptError.stack);
                 const systemPromptElement = document.getElementById('systemPrompt');
                 if (systemPromptElement) {
                     systemPromptElement.value = '';
@@ -613,11 +628,16 @@ class StrategyDetail {
             }
         } catch (error) {
             console.error('Error loading config:', error);
-            // Set defaults on error
-            document.getElementById('maxSteps').value = 30;
-            document.getElementById('maxRetries').value = 3;
-            document.getElementById('baseDelay').value = 1.0;
-            document.getElementById('initialCash').value = 10000;
+            // Set defaults on error (only if elements exist)
+            const maxStepsEl = document.getElementById('maxSteps');
+            const maxRetriesEl = document.getElementById('maxRetries');
+            const baseDelayEl = document.getElementById('baseDelay');
+            const initialCashEl = document.getElementById('initialCash');
+            
+            if (maxStepsEl) maxStepsEl.value = 30;
+            if (maxRetriesEl) maxRetriesEl.value = 3;
+            if (baseDelayEl) baseDelayEl.value = 1.0;
+            if (initialCashEl) initialCashEl.value = 10000;
         }
     }
 
