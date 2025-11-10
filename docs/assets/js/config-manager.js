@@ -47,23 +47,31 @@ class ConfigManager {
     populateForm() {
         if (!this.config) return;
 
+        // Helper function to safely set element value
+        const setValue = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.value = value;
+            }
+        };
+
         // Date range
-        document.getElementById('init_date').value = this.config.date_range?.init_date || '';
-        document.getElementById('end_date').value = this.config.date_range?.end_date || '';
+        setValue('init_date', this.config.date_range?.init_date || '');
+        setValue('end_date', this.config.date_range?.end_date || '');
 
         // Agent config
         const agentConfig = this.config.agent_config || {};
-        document.getElementById('max_steps').value = agentConfig.max_steps || 30;
-        document.getElementById('max_retries').value = agentConfig.max_retries || 3;
-        document.getElementById('base_delay').value = agentConfig.base_delay || 1.0;
-        document.getElementById('initial_cash').value = agentConfig.initial_cash || 10000;
+        setValue('max_steps', agentConfig.max_steps || 30);
+        setValue('max_retries', agentConfig.max_retries || 3);
+        setValue('base_delay', agentConfig.base_delay || 1.0);
+        setValue('initial_cash', agentConfig.initial_cash || 10000);
 
         // Models
         this.populateModels();
 
         // Prompt
         if (this.originalPrompt) {
-            document.getElementById('system_prompt').value = this.originalPrompt;
+            setValue('system_prompt', this.originalPrompt);
         }
     }
 
@@ -114,13 +122,19 @@ class ConfigManager {
 
     // Collect form data
     collectFormData() {
+        // Helper function to safely get element value
+        const getValue = (id, defaultValue = '') => {
+            const element = document.getElementById(id);
+            return element ? element.value : defaultValue;
+        };
+
         const formData = {
             agent_type: this.config?.agent_type || 'BaseAgent',
             date_range: {
-                init_date: document.getElementById('init_date').value,
-                end_date: document.getElementById('end_date').value
+                init_date: getValue('init_date'),
+                end_date: getValue('end_date')
             },
-            models: this.config.models.map((model, index) => {
+            models: (this.config?.models || []).map((model, index) => {
                 const enabledCheckbox = document.querySelector(`.model-enabled[data-model-index="${index}"]`);
                 const basemodelInput = document.querySelector(`.model-basemodel[data-model-index="${index}"]`);
                 const signatureInput = document.querySelector(`.model-signature[data-model-index="${index}"]`);
@@ -135,10 +149,10 @@ class ConfigManager {
                 };
             }),
             agent_config: {
-                max_steps: parseInt(document.getElementById('max_steps').value),
-                max_retries: parseInt(document.getElementById('max_retries').value),
-                base_delay: parseFloat(document.getElementById('base_delay').value),
-                initial_cash: parseFloat(document.getElementById('initial_cash').value)
+                max_steps: parseInt(getValue('max_steps', '30')),
+                max_retries: parseInt(getValue('max_retries', '3')),
+                base_delay: parseFloat(getValue('base_delay', '1.0')),
+                initial_cash: parseFloat(getValue('initial_cash', '10000'))
             },
             log_config: this.config?.log_config || {
                 log_path: './data/agent_data'
@@ -150,7 +164,8 @@ class ConfigManager {
 
     // Get prompt from form
     getPromptFromForm() {
-        return document.getElementById('system_prompt').value.trim();
+        const element = document.getElementById('system_prompt');
+        return element ? element.value.trim() : '';
     }
 
     // Save configuration via API

@@ -539,6 +539,9 @@ class StrategyDetail {
                 await new Promise(resolve => setTimeout(resolve, 200));
             }
             
+            // Check if config was saved and show restart button if needed
+            this.checkAndShowRestartButton();
+            
             // Update date range visibility first
             this.updateDateRangeVisibility();
             
@@ -1411,21 +1414,35 @@ class StrategyDetail {
     // Save configuration
     async saveConfiguration() {
         try {
+            // Helper function to safely get element value
+            const getValue = (id, defaultValue = '') => {
+                const element = document.getElementById(id);
+                if (!element) {
+                    console.warn(`Element with id "${id}" not found`);
+                    return defaultValue;
+                }
+                return element.value || defaultValue;
+            };
+
             const config = {
                 agent_config: {
-                    max_steps: parseInt(document.getElementById('maxSteps').value),
-                    max_retries: parseInt(document.getElementById('maxRetries').value),
-                    base_delay: parseFloat(document.getElementById('baseDelay').value),
-                    initial_cash: parseFloat(document.getElementById('initialCash').value)
+                    max_steps: parseInt(getValue('maxSteps', '30')),
+                    max_retries: parseInt(getValue('maxRetries', '3')),
+                    base_delay: parseFloat(getValue('baseDelay', '1.0')),
+                    initial_cash: parseFloat(getValue('initialCash', '10000'))
                 }
             };
             
             // Only include date_range for backtest mode
             if (this.currentConfigMode === 'backtest') {
-                config.date_range = {
-                    init_date: document.getElementById('startDate').value,
-                    end_date: document.getElementById('endDate').value
-                };
+                const startDate = getValue('startDate');
+                const endDate = getValue('endDate');
+                if (startDate && endDate) {
+                    config.date_range = {
+                        init_date: startDate,
+                        end_date: endDate
+                    };
+                }
             }
             
             // Save config to the correct mode
@@ -1438,19 +1455,27 @@ class StrategyDetail {
             if (!response.ok) throw new Error('Failed to save configuration');
             
             // Save prompt
-            const promptText = document.getElementById('systemPrompt').value;
-            await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/prompt/${this.currentConfigMode}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: promptText })
-            });
+            const promptText = getValue('systemPrompt', '');
+            if (promptText) {
+                await fetch(`${this.apiBase}/api/strategies/${this.strategyId}/prompt/${this.currentConfigMode}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+            }
             
             // Reload config to show saved values
             await this.loadConfigData();
             
+            // Save flag to localStorage to persist across page refreshes
+            const configSavedKey = `config_saved_${this.strategyId}_${this.currentConfigMode}`;
+            localStorage.setItem(configSavedKey, 'true');
+            
             // Show success message and restart button
-            document.getElementById('config-message').style.display = 'block';
-            document.getElementById('restartServiceBtn').style.display = 'inline-block';
+            const configMessage = document.getElementById('config-message');
+            const restartBtn = document.getElementById('restartServiceBtn');
+            if (configMessage) configMessage.style.display = 'block';
+            if (restartBtn) restartBtn.style.display = 'inline-block';
             
             alert('✅ 配置已保存，需要重启服务才能生效');
         } catch (error) {
@@ -1923,6 +1948,19 @@ class StrategyDetail {
         alert('停止功能开发中...');
     }
     
+    // Check and show restart button if config was saved
+    checkAndShowRestartButton() {
+        const configSavedKey = `config_saved_${this.strategyId}_${this.currentConfigMode}`;
+        const configSaved = localStorage.getItem(configSavedKey);
+        
+        if (configSaved === 'true') {
+            const configMessage = document.getElementById('config-message');
+            const restartBtn = document.getElementById('restartServiceBtn');
+            if (configMessage) configMessage.style.display = 'block';
+            if (restartBtn) restartBtn.style.display = 'inline-block';
+        }
+    }
+    
     // Restart service
     async restartService() {
         if (!confirm('确定要重启服务吗？这将停止当前运行的策略。')) {
@@ -1933,16 +1971,25 @@ class StrategyDetail {
             const response = await fetch(`${this.apiBase}/api/restart-service`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ strategy_id: this.strategyId })
+                body: JSON.stringify({ 
+                    strategy_id: this.strategyId,
+                    config_mode: this.currentConfigMode  // Pass the current config mode
+                })
             });
             
             if (!response.ok) throw new Error('Failed to restart service');
             
             const result = await response.json();
             
+            // Clear the saved config flag from localStorage
+            const configSavedKey = `config_saved_${this.strategyId}_${this.currentConfigMode}`;
+            localStorage.removeItem(configSavedKey);
+            
             // Hide restart button and message
-            document.getElementById('config-message').style.display = 'none';
-            document.getElementById('restartServiceBtn').style.display = 'none';
+            const configMessage = document.getElementById('config-message');
+            const restartBtn = document.getElementById('restartServiceBtn');
+            if (configMessage) configMessage.style.display = 'none';
+            if (restartBtn) restartBtn.style.display = 'none';
             
             alert('✅ ' + result.message);
         } catch (error) {

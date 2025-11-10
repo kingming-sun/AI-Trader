@@ -571,23 +571,75 @@ def restart_service():
     try:
         data = request.get_json()
         strategy_id = data.get('strategy_id')
+        config_mode = data.get('config_mode', 'backtest')  # Get from request, default to 'backtest'
         
-        # TODO: Implement service restart logic
-        # This would typically:
-        # 1. Stop the current main.py process if running
-        # 2. Start a new main.py process with updated config
+        if not strategy_id:
+            return jsonify({
+                "success": False,
+                "error": "策略ID未指定"
+            }), 400
         
-        import subprocess
-        import sys
+        # Validate config_mode
+        if config_mode not in ['backtest', 'simulate', 'real']:
+            config_mode = 'backtest'  # Default to backtest if invalid
         
-        # For now, return a message that restart needs to be done manually
-        return jsonify({
-            "success": True,
-            "message": "Please restart the service manually to apply configuration changes",
-            "manual_command": f"python main.py --strategy {strategy_id}" if strategy_id else "python main.py"
-        })
+        # Convert to TradingMode
+        mode_map = {
+            'backtest': TradingMode.BACKTEST,
+            'simulate': TradingMode.SIMULATE,
+            'real': TradingMode.REAL
+        }
+        trading_mode = mode_map.get(config_mode, TradingMode.BACKTEST)
+        
+        # Step 1: Stop the current strategy if running
+        stopped_info = None
+        for mode_name, mode_enum in mode_map.items():
+            stop_result = run_manager.stop_strategy(strategy_id, mode_enum)
+            if stop_result.get("success"):
+                stopped_info = {
+                    "mode": mode_name,
+                    "message": stop_result.get("message", "已停止")
+                }
+                break
+        
+        # Wait a bit for process to fully terminate
+        import time
+        time.sleep(1)
+        
+        # Step 2: Restart the strategy with the current config mode
+        try:
+            run_result = run_manager.run_strategy(strategy_id, trading_mode)
+            
+            if "error" in run_result:
+                return jsonify({
+                    "success": False,
+                    "error": run_result.get("error", "重启策略失败"),
+                    "stopped_info": stopped_info
+                }), 500
+            
+            return jsonify({
+                "success": True,
+                "message": f"服务已重启，策略 {strategy_id} 正在以 {config_mode} 模式运行",
+                "strategy_id": strategy_id,
+                "mode": config_mode,
+                "process_id": run_result.get("process_id"),
+                "stopped_info": stopped_info
+            })
+        except Exception as run_error:
+            return jsonify({
+                "success": False,
+                "error": f"重启策略时出错: {str(run_error)}",
+                "stopped_info": stopped_info
+            }), 500
+        
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        import traceback
+        print(f"Error restarting service: {e}")
+        print(traceback.format_exc())
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 if __name__ == '__main__':
     port = int(os.getenv('STRATEGY_API_PORT', '8005'))
