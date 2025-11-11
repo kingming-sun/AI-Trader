@@ -171,10 +171,8 @@ When you think your task is complete, output
         # Set mode-specific settings
         if mode == "simulate":
             config["use_realtime_data"] = True
-            config["moomoo_env"] = "SIMULATE"
         elif mode == "real":
             config["use_realtime_data"] = True
-            config["moomoo_env"] = "REAL"
         
         return config
     
@@ -220,7 +218,6 @@ When you think your task is complete, output
                 "end_date": datetime.now().strftime("%Y-%m-%d")
             }
             mode_config["use_realtime_data"] = True
-            mode_config["moomoo_env"] = "SIMULATE"
         
         elif mode == "real":
             # Real uses real-time data and real trading
@@ -229,7 +226,6 @@ When you think your task is complete, output
                 "end_date": None  # Continuous
             }
             mode_config["use_realtime_data"] = True
-            mode_config["moomoo_env"] = "REAL"
             mode_config["risk_control"] = {
                 "max_daily_loss": 0.05,
                 "max_position_size": 0.2,

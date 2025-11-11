@@ -97,16 +97,6 @@ async def main(config_path=None):
     Args:
         config_path: Configuration file path, if None use default config
     """
-    # Import cleanup function for Moomoo client
-    moomoo_cleanup = None
-    if os.getenv("USE_MOOMOO", "false").lower() == "true":
-        try:
-            from agent_tools.moomoo_client import close_moomoo_client
-            moomoo_cleanup = close_moomoo_client
-            print("✅ Moomoo cleanup function registered")
-        except ImportError:
-            print("⚠️  Moomoo client module not available for cleanup")
-    
     try:
         # Load configuration file
         config = load_config(config_path)
@@ -305,13 +295,6 @@ async def main(config_path=None):
         print("🎉 All models processing completed!")
     
     finally:
-        # Cleanup Moomoo client if it was initialized
-        if moomoo_cleanup:
-            try:
-                moomoo_cleanup()
-                print("✅ Moomoo connection closed")
-            except Exception as e:
-                print(f"⚠️  Error during Moomoo cleanup: {e}")
     
 if __name__ == "__main__":
     import sys

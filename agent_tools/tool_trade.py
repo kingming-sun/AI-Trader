@@ -9,17 +9,7 @@ from tools.price_tools import get_yesterday_date, get_open_prices, get_yesterday
 import json
 from tools.general_tools import get_config_value,write_config_value
 
-# Check if real trading mode is enabled
-USE_REAL_TRADING = os.getenv("USE_MOOMOO", "false").lower() == "true"
-
-if USE_REAL_TRADING:
-    try:
-        from agent_tools.moomoo_client import get_moomoo_client, execute_trade_with_risk_control
-        print("✅ Real trading mode enabled - Moomoo client imported")
-    except ImportError as e:
-        print(f"⚠️  Failed to import Moomoo client: {e}")
-        print("   Falling back to simulation mode")
-        USE_REAL_TRADING = False
+# All trading is now simulation mode using Alpha Vantage API for price data
 
 mcp = FastMCP("TradeTools")
 
@@ -30,9 +20,9 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
     """
     Buy stock function
     
-    This function handles stock buying operations in both real and simulation modes:
-    - Simulation mode: Updates local position files
-    - Real mode: Executes actual trades via Moomoo API
+    This function handles stock buying operations in simulation mode:
+    - Updates local position files
+    - Uses Alpha Vantage API for price data when needed
     
     Args:
         symbol: Stock symbol, such as "AAPL", "MSFT", etc.
@@ -58,62 +48,6 @@ def buy(symbol: str, amount: int) -> Dict[str, Any]:
     
     # Get current trading date from environment variable
     today_date = get_config_value("TODAY_DATE")
-    
-    # Check if using real trading mode
-    if USE_REAL_TRADING:
-        print(f"🔄 Executing REAL buy order: {amount} shares of {symbol}")
-        
-        # Get Moomoo client
-        moomoo_client = get_moomoo_client()
-        if not moomoo_client:
-            return {"error": "Moomoo client not initialized", "symbol": symbol, "date": today_date}
-        
-        # Ensure client is connected
-        if not moomoo_client.connected:
-            if not moomoo_client.connect():
-                return {"error": "Failed to connect to Moomoo", "symbol": symbol, "date": today_date}
-        
-        # Execute real trade with risk control
-        result = execute_trade_with_risk_control("buy", symbol, amount)
-        
-        if result.get("success"):
-            # Get latest position for local tracking
-            current_position, current_action_id = get_latest_position(today_date, signature)
-            
-            # Update local position file for consistency
-            new_position = current_position.copy()
-            
-            # Get real price from result
-            real_price = result.get("price", 0)
-            new_position["CASH"] = new_position.get("CASH", 0) - (real_price * amount)
-            new_position[symbol] = new_position.get(symbol, 0) + amount
-            
-            # Record to position file
-            # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
-            data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
-            if data_path:
-                position_file_path = os.path.join(data_path, "position", "position.jsonl")
-            else:
-                # Fallback to old structure
-                position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
-            
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
-            
-            with open(position_file_path, "a") as f:
-                print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'buy','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position}, ensure_ascii=False)}")
-                f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"buy","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}, ensure_ascii=False) + "\n")
-            
-            write_config_value("IF_TRADE", True)
-            print(f"✅ Real buy order executed successfully: Order ID {result.get('order_id')}")
-            return new_position
-        else:
-            # Real trade failed
-            error_msg = result.get("error", "Unknown error")
-            print(f"❌ Real buy order failed: {error_msg}")
-            return {"error": f"Real trade failed: {error_msg}", "symbol": symbol, "date": today_date}
-    
-    # Original simulation mode logic follows...
     
     # Step 2: Get current latest position and operation ID
     # get_latest_position returns two values: position dictionary and current maximum operation ID
@@ -181,9 +115,9 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
     """
     Sell stock function
     
-    This function handles stock selling operations in both real and simulation modes:
-    - Simulation mode: Updates local position files
-    - Real mode: Executes actual trades via Moomoo API
+    This function handles stock selling operations in simulation mode:
+    - Updates local position files
+    - Uses Alpha Vantage API for price data when needed
     
     Args:
         symbol: Stock symbol, such as "AAPL", "MSFT", etc.
@@ -209,62 +143,6 @@ def sell(symbol: str, amount: int) -> Dict[str, Any]:
     
     # Get current trading date from environment variable
     today_date = get_config_value("TODAY_DATE")
-    
-    # Check if using real trading mode
-    if USE_REAL_TRADING:
-        print(f"🔄 Executing REAL sell order: {amount} shares of {symbol}")
-        
-        # Get Moomoo client
-        moomoo_client = get_moomoo_client()
-        if not moomoo_client:
-            return {"error": "Moomoo client not initialized", "symbol": symbol, "date": today_date}
-        
-        # Ensure client is connected
-        if not moomoo_client.connected:
-            if not moomoo_client.connect():
-                return {"error": "Failed to connect to Moomoo", "symbol": symbol, "date": today_date}
-        
-        # Execute real trade with risk control
-        result = execute_trade_with_risk_control("sell", symbol, amount)
-        
-        if result.get("success"):
-            # Get latest position for local tracking
-            current_position, current_action_id = get_latest_position(today_date, signature)
-            
-            # Update local position file for consistency
-            new_position = current_position.copy()
-            
-            # Get real price from result
-            real_price = result.get("price", 0)
-            new_position[symbol] = new_position.get(symbol, 0) - amount
-            new_position["CASH"] = new_position.get("CASH", 0) + (real_price * amount)
-            
-            # Record to position file
-            # Try new path structure first (from DATA_PATH in runtime_env.json or environment variable)
-            data_path = get_config_value("DATA_PATH") or os.getenv("DATA_PATH")
-            if data_path:
-                position_file_path = os.path.join(data_path, "position", "position.jsonl")
-            else:
-                # Fallback to old structure
-                position_file_path = os.path.join(project_root, "data", "agent_data", signature, "position", "position.jsonl")
-            
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(position_file_path), exist_ok=True)
-            
-            with open(position_file_path, "a") as f:
-                print(f"Writing REAL trade to position.jsonl: {json.dumps({'date': today_date, 'id': current_action_id + 1, 'this_action':{'action':'sell','symbol':symbol,'amount':amount,'real_trade':True,'order_id':result.get('order_id')},'positions': new_position}, ensure_ascii=False)}")
-                f.write(json.dumps({"date": today_date, "id": current_action_id + 1, "this_action":{"action":"sell","symbol":symbol,"amount":amount,"real_trade":True,"order_id":result.get("order_id")},"positions": new_position}, ensure_ascii=False) + "\n")
-            
-            write_config_value("IF_TRADE", True)
-            print(f"✅ Real sell order executed successfully: Order ID {result.get('order_id')}")
-            return new_position
-        else:
-            # Real trade failed
-            error_msg = result.get("error", "Unknown error")
-            print(f"❌ Real sell order failed: {error_msg}")
-            return {"error": f"Real trade failed: {error_msg}", "symbol": symbol, "date": today_date}
-    
-    # Original simulation mode logic follows...
     
     # Step 2: Get current latest position and operation ID
     # get_latest_position returns two values: position dictionary and current maximum operation ID

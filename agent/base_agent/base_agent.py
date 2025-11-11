@@ -172,23 +172,6 @@ class BaseAgent:
             timeout=30
         )
         
-        # Initialize Moomoo client if real trading mode is enabled
-        if os.getenv("USE_MOOMOO", "false").lower() == "true":
-            try:
-                from agent_tools.moomoo_client import init_moomoo_client
-                print("🔄 Initializing Moomoo client for real trading...")
-                if init_moomoo_client():
-                    print("✅ Moomoo client initialized successfully")
-                else:
-                    print("❌ Failed to initialize Moomoo client")
-                    print("   Continuing without real trading features")
-            except ImportError as e:
-                print(f"⚠️  Moomoo client module not available: {e}")
-                print("   Continuing in simulation mode")
-            except Exception as e:
-                print(f"❌ Error initializing Moomoo client: {e}")
-                print("   Continuing in simulation mode")
-        
         # Note: agent will be created in run_trading_session() based on specific date
         # because system_prompt needs the current date and price information
         

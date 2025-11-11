@@ -20,11 +20,6 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ALPHAADVANTAGE_API_KEY=${ALPHAADVANTAGE_API_KEY:-}
       - JINA_API_KEY=${JINA_API_KEY:-}
-      - MOOMOO_HOST=${MOOMOO_HOST:-127.0.0.1}
-      - MOOMOO_PORT=${MOOMOO_PORT:-11111}
-      - MOOMOO_TRD_ENV=${MOOMOO_TRD_ENV:-SIMULATE}
-      - MOOMOO_UNLOCK_PWD=${MOOMOO_UNLOCK_PWD:-}
-      - MOOMOO_API_KEY=${MOOMOO_API_KEY:-}
     volumes:
       - ./data:/app/data
       - ./configs:/app/configs

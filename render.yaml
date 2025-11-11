@@ -15,11 +15,6 @@ services:
       # OPENAI_API_KEY
       # ALPHAADVANTAGE_API_KEY
       # JINA_API_KEY
-      # MOOMOO_HOST (optional)
-      # MOOMOO_PORT (optional)
-      # MOOMOO_TRD_ENV (optional)
-      # MOOMOO_UNLOCK_PWD (optional)
-      # MOOMOO_API_KEY (optional)
     healthCheckPath: /health
     buildCommand: docker build -t ai-trader .
     startCommand: python startup.py

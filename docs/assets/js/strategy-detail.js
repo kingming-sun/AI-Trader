@@ -355,17 +355,21 @@ class StrategyDetail {
                             <div>开始: ${data.start_date}</div>
                             <div>结束: ${data.end_date}</div>
                         </div>
+                        <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--accent-cyan);">
+                            ✨ 可以选择超出此范围的日期，缺失数据将自动从 API 获取
+                        </div>
                     `;
                     
-                    // Set min/max attributes on date inputs
+                    // 不再设置 min/max 限制，允许选择超出本地范围的日期
                     const startInput = document.getElementById('startDate');
                     const endInput = document.getElementById('endDate');
                     
                     if (startInput && endInput) {
-                        startInput.min = data.start_date;
-                        startInput.max = data.end_date;
-                        endInput.min = data.start_date;
-                        endInput.max = data.end_date;
+                        // 移除日期限制，允许选择任意日期
+                        startInput.removeAttribute('min');
+                        startInput.removeAttribute('max');
+                        endInput.removeAttribute('min');
+                        endInput.removeAttribute('max');
                     }
                 } else {
                     rangeText.innerHTML = `
@@ -481,7 +485,7 @@ class StrategyDetail {
                 if (modeDescText) {
                     modeDescText.innerHTML = `
                         <div>🎯 <strong>模拟盘模式</strong></div>
-                        <div style="margin-top: 0.5rem;">✅ 使用 Moomoo 实时市场数据</div>
+                        <div style="margin-top: 0.5rem;">✅ 使用 Alpha Vantage API 获取市场数据</div>
                         <div>✅ 从当前时间开始交易</div>
                         <div>✅ 持续运行直到手动停止</div>
                         <div>✅ 模拟账户，无真实资金</div>
@@ -493,7 +497,7 @@ class StrategyDetail {
                     realtimeConfigDesc.innerHTML = `
                         <div>📅 开始日期: <strong>${today}</strong> (今天)</div>
                         <div style="margin-top: 0.5rem;">🔄 持续运行，无结束日期</div>
-                        <div style="margin-top: 0.5rem; color: var(--accent-cyan);">ℹ️ 系统将使用 Moomoo API 获取实时行情数据</div>
+                        <div style="margin-top: 0.5rem; color: var(--accent-cyan);">ℹ️ 系统将使用 Alpha Vantage API 获取市场数据</div>
                     `;
                 }
                 
@@ -510,7 +514,7 @@ class StrategyDetail {
                     modeDescText.innerHTML = `
                         <div>⚡ <strong>实盘模式</strong></div>
                         <div style="margin-top: 0.5rem; color: var(--warning);">⚠️ 使用真实资金交易</div>
-                        <div>📊 使用 Moomoo 实时市场数据</div>
+                        <div>📊 使用 Alpha Vantage API 获取市场数据</div>
                         <div>⏰ 从当前时间开始交易</div>
                         <div>🔄 持续运行直到手动停止</div>
                         <div style="color: var(--danger);">❗ 请确保已充分测试策略</div>
@@ -1544,7 +1548,7 @@ class StrategyDetail {
                 '• 将使用真实资金执行交易\n' +
                 `• 从当前时间开始交易（${today}）\n` +
                 '• 持续运行直到手动停止\n' +
-                '• 使用 Moomoo 实时市场数据\n\n' +
+                '• 使用 Alpha Vantage API 获取市场数据\n\n' +
                 '请确保：\n' +
                 '1. 已充分测试策略（回测 + 模拟盘）\n' +
                 '2. 已配置风险控制参数\n' +
@@ -1583,7 +1587,8 @@ class StrategyDetail {
                 '📊 确定要启动回测吗？\n\n' +
                 '回测设置：\n' +
                 `• 日期范围：${startDate} 至 ${endDate}\n` +
-                '• 使用历史数据 (merged.jsonl)\n' +
+                '• 优先使用本地数据 (merged.jsonl)\n' +
+                '• 缺失数据将自动从 API 获取\n' +
                 '• 处理完所有交易日后自动结束\n' +
                 '• 无资金风险\n\n' +
                 '是否继续？'
@@ -2198,15 +2203,17 @@ class StrategyDetail {
             if (data.available) {
                 rangeSpan.textContent = `${data.start_date} 至 ${data.end_date}`;
                 
-                // Set min/max attributes on date inputs
+                // 不再设置 min/max 限制，允许选择超出本地范围的日期
+                // 缺失数据将自动从 API 获取
                 const startInput = document.getElementById('assetStartDate');
                 const endInput = document.getElementById('assetEndDate');
                 
                 if (startInput && endInput) {
-                    startInput.min = data.start_date;
-                    startInput.max = data.end_date;
-                    endInput.min = data.start_date;
-                    endInput.max = data.end_date;
+                    // 移除日期限制，允许选择任意日期
+                    startInput.removeAttribute('min');
+                    startInput.removeAttribute('max');
+                    endInput.removeAttribute('min');
+                    endInput.removeAttribute('max');
                 }
             } else {
                 rangeSpan.textContent = '无本地数据（将自动从 API 获取）';

@@ -214,9 +214,7 @@ class RunManager:
         runtime_env_path = self.project_root / "runtime_env.json"
         env["RUNTIME_ENV_PATH"] = str(runtime_env_path)
         
-        if mode in ["simulate", "real"]:
-            env["USE_MOOMOO"] = "true"
-            env["MOOMOO_TRD_ENV"] = run_info["config"].get("moomoo_env", "SIMULATE")
+        # All modes now use Alpha Vantage API for price data
         
         # Create config file for main.py
         config_file = self.project_root / "configs" / f"runtime_{strategy_id}_{mode}.json"
@@ -777,9 +775,7 @@ class RunManager:
                 env["RESUME_BACKTEST"] = "true"
                 env["RESUME_FROM_DATE"] = progress_info.get("current_date", "")
             
-            if mode in ["simulate", "real"]:
-                env["USE_MOOMOO"] = "true"
-                env["MOOMOO_TRD_ENV"] = run_info["config"].get("moomoo_env", "SIMULATE")
+            # All modes now use Alpha Vantage API for price data
             
             # Create config file for main.py
             config_file = self.project_root / "configs" / f"runtime_{strategy_id}_{mode}.json"

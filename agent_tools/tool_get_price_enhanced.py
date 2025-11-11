@@ -18,16 +18,6 @@ load_dotenv()
 
 # API Configuration
 ALPHA_VANTAGE_KEY = os.getenv("ALPHAADVANTAGE_API_KEY", "")
-USE_REAL_TRADING = os.getenv("USE_MOOMOO", "false").lower() == "true"
-
-# Try to import Moomoo client for real-time data
-if USE_REAL_TRADING:
-    try:
-        from agent_tools.moomoo_client import get_moomoo_client
-        print("✅ Real-time price fetching enabled - Moomoo client imported")
-    except ImportError as e:
-        print(f"⚠️  Failed to import Moomoo client: {e}")
-        USE_REAL_TRADING = False
 
 mcp = FastMCP("EnhancedPrices")
 
@@ -149,52 +139,15 @@ def get_from_local_file(symbol: str, date_str: str, filename: str = "merged.json
     return None
 
 
-def get_from_moomoo_realtime(symbol: str, date_str: str) -> Optional[Dict[str, Any]]:
-    """
-    Get real-time price from Moomoo (for today's date only)
-    
-    Returns None if not available or not today
-    """
-    if not USE_REAL_TRADING:
-        return None
-    
-    # Only use real-time data for today
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    if date_str != today_str:
-        return None
-    
-    try:
-        moomoo_client = get_moomoo_client()
-        price = moomoo_client.get_stock_price(symbol)
-        if price:
-            return {
-                "symbol": symbol,
-                "date": date_str,
-                "ohlcv": {
-                    "open": price,
-                    "high": price,
-                    "low": price,
-                    "close": price,
-                    "volume": 0,
-                },
-                "source": "moomoo_realtime"
-            }
-    except Exception as e:
-        print(f"⚠️  Failed to get real-time price: {e}")
-    
-    return None
-
-
 @mcp.tool()
 def get_price_enhanced(symbol: str, date: str, prefer_api: bool = False) -> Dict[str, Any]:
     """
     Get stock price with automatic fallback between local data and API.
     
     Priority order:
-    1. Real-time data from Moomoo (if today and enabled)
-    2. Local data file (if not prefer_api)
-    3. Alpha Vantage API (if local not found or prefer_api)
-    4. Local data file (if API failed and prefer_api)
+    1. Local data file (if not prefer_api)
+    2. Alpha Vantage API (if local not found or prefer_api)
+    3. Local data file (if API failed and prefer_api)
     
     Args:
         symbol: Stock symbol (e.g., 'AAPL', 'GOOGL')
@@ -211,12 +164,6 @@ def get_price_enhanced(symbol: str, date: str, prefer_api: bool = False) -> Dict
     
     # Track data sources tried
     sources_tried = []
-    
-    # 1. Try real-time data for today
-    realtime_data = get_from_moomoo_realtime(symbol, date)
-    if realtime_data:
-        print(f"✅ Using real-time data from Moomoo for {symbol} on {date}")
-        return realtime_data
     
     if prefer_api:
         # 2a. Try API first if preferred

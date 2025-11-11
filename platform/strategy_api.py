@@ -587,13 +587,17 @@ def get_available_data_range():
                 "available": True,
                 "start_date": min_date,
                 "end_date": max_date,
-                "message": f"数据范围: {min_date} 到 {max_date}"
+                "message": f"数据范围: {min_date} 到 {max_date}",
+                "api_fallback": True,  # 标识支持 API 自动获取缺失数据
+                "api_message": "可以选择超出本地范围的日期，缺失数据将自动从 Alpha Vantage API 获取"
             })
         else:
             return jsonify({
                 "success": True,
                 "available": False,
-                "message": "本地没有可用的价格数据"
+                "message": "本地没有可用的价格数据",
+                "api_fallback": True,  # 标识支持 API 自动获取缺失数据
+                "api_message": "将完全依赖 Alpha Vantage API 获取数据"
             })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
