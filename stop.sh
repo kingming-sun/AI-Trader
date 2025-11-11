@@ -50,10 +50,12 @@ fi
 echo "🧹 Cleaning up remaining processes..."
 
 # Stop MCP services
+# Note: Search and LocalPrices are replaced by Alpha Vantage MCP server
 pkill -f "start_mcp_services.py" 2>/dev/null || true
 pkill -f "tool_math.py" 2>/dev/null || true
-pkill -f "tool_jina_search.py" 2>/dev/null || true
 pkill -f "tool_trade.py" 2>/dev/null || true
+# Legacy services (no longer used, but kept for cleanup)
+pkill -f "tool_jina_search.py" 2>/dev/null || true
 pkill -f "tool_get_price_local.py" 2>/dev/null || true
 
 # Stop API services

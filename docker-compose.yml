@@ -9,9 +9,8 @@ services:
       - "8004:8004"  # Config API
       - "8005:8005"  # Strategy API
       - "8000:8000"  # MCP Math
-      - "8001:8001"  # MCP Search
       - "8002:8002"  # MCP Trade
-      - "8003:8003"  # MCP Price
+      # Note: Search and LocalPrices replaced by Alpha Vantage MCP server
     environment:
       - PYTHONUNBUFFERED=1
       - PORT=8080

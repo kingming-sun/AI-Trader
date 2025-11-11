@@ -99,9 +99,8 @@ def get_daily_portfolio_values(modelname: str, start_date: Optional[str] = None,
     """
     base_dir = Path(__file__).resolve().parents[1]
     position_file = base_dir / "data" / "agent_data" / modelname / "position" / "position.jsonl"
-    merged_file = base_dir / "data" / "merged.jsonl"
     
-    if not position_file.exists() or not merged_file.exists():
+    if not position_file.exists():
         return {}
     
     # Get available date range if not specified
@@ -127,20 +126,9 @@ def get_daily_portfolio_values(modelname: str, start_date: Optional[str] = None,
             except Exception:
                 continue
     
-    # Read price data
-    price_data = {}
-    with merged_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                doc = json.loads(line)
-                meta = doc.get("Meta Data", {})
-                symbol = meta.get("2. Symbol")
-                if symbol:
-                    price_data[symbol] = doc.get("Time Series (Daily)", {})
-            except Exception:
-                continue
+    # Import Alpha Vantage price fetching function
+    from tools.price_tools import _fetch_price_from_alpha_vantage
+    import time
     
     # Calculate daily portfolio values
     daily_values = {}
@@ -165,18 +153,18 @@ def get_daily_portfolio_values(modelname: str, start_date: Optional[str] = None,
         latest_record = max(records, key=lambda x: x.get("id", 0))
         positions = latest_record.get("positions", {})
         
-        # Get daily prices
+        # Get daily prices from Alpha Vantage API
+        # Only fetch prices for symbols that are actually held
         daily_prices = {}
-        for symbol in all_nasdaq_100_symbols:
-            if symbol in price_data:
-                symbol_prices = price_data[symbol]
-                if date in symbol_prices:
-                    price_info = symbol_prices[date]
-                    buy_price = price_info.get("1. buy price")
-                    sell_price = price_info.get("4. sell price")
-                    # Use closing (sell) price to calculate value
-                    if sell_price is not None:
-                        daily_prices[f'{symbol}_price'] = float(sell_price)
+        symbols_to_fetch = [symbol for symbol in all_nasdaq_100_symbols if positions.get(symbol, 0) > 0]
+        
+        for symbol in symbols_to_fetch:
+            price_data = _fetch_price_from_alpha_vantage(symbol, date)
+            if price_data and price_data.get("close"):
+                daily_prices[f'{symbol}_price'] = price_data["close"]
+            # Add delay to avoid rate limiting (150 calls per minute for premium tier)
+            # 60000ms / 150 = 400ms, using 450ms for safety margin
+            time.sleep(0.45)
         
         # Calculate portfolio value
         cash = positions.get("CASH", 0.0)

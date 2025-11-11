@@ -16,44 +16,24 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from tools.price_tools import get_open_prices, get_yesterday_open_and_close_price
+from tools.price_tools import get_open_prices, get_yesterday_open_and_close_price, _fetch_price_from_alpha_vantage
+import time
 
 def get_close_prices(date: str, symbols: List[str]) -> Dict[str, Optional[float]]:
-    """Get closing prices (sell prices) for symbols on a specific date"""
-    import json
-    from pathlib import Path
-    
-    wanted = set(symbols)
+    """Get closing prices for symbols on a specific date from Alpha Vantage API"""
     results: Dict[str, Optional[float]] = {}
     
-    base_dir = Path(__file__).resolve().parents[1]
-    merged_file = base_dir / "data" / "merged.jsonl"
-    
-    if not merged_file.exists():
-        return results
-    
-    with merged_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                doc = json.loads(line)
-            except Exception:
-                continue
-            meta = doc.get("Meta Data", {}) if isinstance(doc, dict) else {}
-            sym = meta.get("2. Symbol")
-            if sym not in wanted:
-                continue
-            series = doc.get("Time Series (Daily)", {})
-            if not isinstance(series, dict):
-                continue
-            bar = series.get(date)
-            if isinstance(bar, dict):
-                sell_val = bar.get("4. sell price")  # Closing price
-                try:
-                    results[f'{sym}_price'] = float(sell_val) if sell_val is not None else None
-                except Exception:
-                    results[f'{sym}_price'] = None
+    # Fetch prices from Alpha Vantage API for each symbol
+    for symbol in symbols:
+        price_data = _fetch_price_from_alpha_vantage(symbol, date)
+        if price_data and price_data.get("close"):
+            results[f'{symbol}_price'] = price_data["close"]
+        else:
+            results[f'{symbol}_price'] = None
+        
+        # Add delay to avoid rate limiting (150 calls per minute for premium tier)
+        # 60000ms / 150 = 400ms, using 450ms for safety margin
+        time.sleep(0.45)  # 450ms delay between requests
     
     return results
 

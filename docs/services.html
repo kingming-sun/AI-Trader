@@ -56,8 +56,8 @@
             border-radius: 8px;
             padding: 1rem;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            align-items: stretch;
             transition: all var(--transition-fast);
         }
         
@@ -66,8 +66,13 @@
             border-color: var(--accent-blue);
         }
         
+        .service-item.has-tools {
+            padding: 1.25rem;
+        }
+        
         .service-info {
             flex: 1;
+            width: 100%;
         }
         
         .service-name {
@@ -80,6 +85,92 @@
         .service-details {
             color: var(--text-muted);
             font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .service-tools {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .tools-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .tools-count {
+            color: var(--accent-cyan);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .tools-type {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+        
+        .tools-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        
+        .tool-tag {
+            display: inline-block;
+            background: rgba(0, 150, 255, 0.1);
+            color: var(--accent-blue);
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border: 1px solid rgba(0, 150, 255, 0.2);
+        }
+        
+        .tool-more {
+            display: inline-block;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-style: italic;
+            padding: 0.25rem 0.6rem;
+        }
+        
+        .service-item .service-status {
+            margin-top: 0.75rem;
+            align-self: flex-start;
+        }
+        
+        .service-item .service-actions {
+            margin-top: 0.75rem;
+            align-self: flex-end;
+            margin-left: 0;
+        }
+        
+        /* For services with action buttons, use row layout */
+        .service-item:not(.is-remote) {
+            flex-direction: row;
+            justify-content: space-between;
+        }
+        
+        .service-item:not(.is-remote) .service-info {
+            flex: 1;
+        }
+        
+        .service-item:not(.is-remote) .service-status,
+        .service-item:not(.is-remote) .service-actions {
+            margin-top: 0;
+            align-self: center;
+        }
+        
+        /* Remote services (no action buttons) use column layout */
+        .service-item.is-remote {
+            flex-direction: column;
+        }
+        
+        .service-item.is-remote .service-status {
+            align-self: flex-start;
         }
         
         .service-status {
@@ -227,6 +318,137 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        /* Tool Detail Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            max-width: 900px;
+            max-height: 90vh;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: var(--accent-cyan);
+            font-size: 1.5rem;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            line-height: 1;
+            transition: color var(--transition-fast);
+        }
+        
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .tool-item {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .tool-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .tool-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+            margin-bottom: 0.5rem;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .tool-description {
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+        
+        .tool-params {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .tool-params-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .param-item {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.85rem;
+        }
+        
+        .param-name {
+            color: var(--accent-blue);
+            font-family: 'Courier New', monospace;
+            min-width: 100px;
+        }
+        
+        .param-type {
+            color: var(--text-secondary);
+        }
+        
+        .service-item {
+            cursor: pointer;
+        }
+        
+        .service-item:hover {
+            border-color: var(--accent-blue);
+        }
     </style>
 </head>
 <body>
@@ -284,6 +506,19 @@
             </button>
         </div>
     </main>
+
+    <!-- Tool Detail Modal -->
+    <div class="modal-overlay" id="toolModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">工具详情</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Tool details will be loaded here -->
+            </div>
+        </div>
+    </div>
 
     <footer class="footer">
         <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>

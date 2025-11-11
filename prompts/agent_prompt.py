@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 # Add project root directory to Python path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 from tools.price_tools import get_yesterday_date, get_open_prices, get_yesterday_open_and_close_price, get_today_init_position, get_yesterday_profit
 from tools.general_tools import get_config_value
 
@@ -152,17 +152,93 @@ def get_agent_system_prompt(today_date: str, signature: str) -> str:
     strategy_prompt = load_strategy_prompt()
     prompt_template = strategy_prompt if strategy_prompt else agent_system_prompt
     
-    # Get yesterday's buy and sell prices
-    yesterday_buy_prices, yesterday_sell_prices = get_yesterday_open_and_close_price(today_date, all_nasdaq_100_symbols)
-    today_buy_price = get_open_prices(today_date, all_nasdaq_100_symbols)
-    today_init_position = get_today_init_position(today_date, signature)
+    # Get yesterday's buy and sell prices with error handling and progress logging
+    print(f"📊 Fetching yesterday's prices for {len(all_nasdaq_100_symbols)} stocks...")
+    print(f"   This may take approximately {len(all_nasdaq_100_symbols) * 0.45 / 60:.1f} minutes...")
+    try:
+        yesterday_buy_prices, yesterday_sell_prices = get_yesterday_open_and_close_price(today_date, all_nasdaq_100_symbols)
+        print(f"✅ Successfully fetched yesterday's prices")
+    except Exception as e:
+        print(f"❌ Error fetching yesterday's prices: {e}")
+        import traceback
+        traceback.print_exc()
+        # Use empty dicts as fallback
+        yesterday_buy_prices, yesterday_sell_prices = {}, {}
+    
+    # Get today's buy prices with error handling and progress logging
+    print(f"📊 Fetching today's prices for {len(all_nasdaq_100_symbols)} stocks...")
+    print(f"   This may take approximately {len(all_nasdaq_100_symbols) * 0.45 / 60:.1f} minutes...")
+    try:
+        today_buy_price = get_open_prices(today_date, all_nasdaq_100_symbols)
+        print(f"✅ Successfully fetched today's prices")
+    except Exception as e:
+        print(f"❌ Error fetching today's prices: {e}")
+        import traceback
+        traceback.print_exc()
+        # Use empty dict as fallback
+        today_buy_price = {}
+    
+    # Get today's initial position
+    try:
+        today_init_position = get_today_init_position(today_date, signature)
+        print(f"✅ Successfully loaded initial position")
+    except Exception as e:
+        print(f"❌ Error loading initial position: {e}")
+        import traceback
+        traceback.print_exc()
+        # Use empty dict as fallback
+        today_init_position = {}
+    
+    # Format price data more compactly to reduce token usage
+    # Only show stocks that have positions or significant price changes
+    def format_price_dict(price_dict: Dict, max_items: int = 20) -> str:
+        """Format price dictionary in a compact way, limiting items"""
+        if not price_dict:
+            return "No price data available"
+        
+        # Filter out None values and limit items
+        valid_items = [(k, v) for k, v in price_dict.items() if v is not None][:max_items]
+        if not valid_items:
+            return "No valid price data"
+        
+        # Format as compact string
+        lines = [f"{k}: {v:.2f}" for k, v in valid_items]
+        result = "\n".join(lines)
+        if len(price_dict) > max_items:
+            result += f"\n... (showing {max_items} of {len(price_dict)} items)"
+        return result
+    
+    # Format positions more compactly
+    def format_positions(positions: Dict) -> str:
+        """Format positions in a compact way"""
+        if not positions:
+            return "No positions"
+        
+        # Show CASH first, then stocks with non-zero positions
+        lines = []
+        if "CASH" in positions:
+            lines.append(f"CASH: {positions['CASH']:.2f}")
+        
+        stock_positions = {k: v for k, v in positions.items() if k != "CASH" and v != 0}
+        for symbol, shares in list(stock_positions.items())[:15]:  # Limit to 15 stocks
+            lines.append(f"{symbol}: {shares:.4f}")
+        
+        if len(stock_positions) > 15:
+            lines.append(f"... (showing 15 of {len(stock_positions)} positions)")
+        
+        return "\n".join(lines) if lines else "No positions"
+    
+    # Format prices compactly (limit to 20 items each)
+    yesterday_close_str = format_price_dict(yesterday_sell_prices, max_items=20)
+    today_buy_str = format_price_dict(today_buy_price, max_items=20)
+    positions_str = format_positions(today_init_position)
     
     return prompt_template.format(
         date=today_date, 
-        positions=today_init_position, 
+        positions=positions_str, 
         STOP_SIGNAL=STOP_SIGNAL,
-        yesterday_close_price=yesterday_sell_prices,
-        today_buy_price=today_buy_price
+        yesterday_close_price=yesterday_close_str,
+        today_buy_price=today_buy_str
     )
 
 

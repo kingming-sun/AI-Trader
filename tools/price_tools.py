@@ -6,12 +6,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 import sys
+import requests
+import time
 
 # 将项目根目录加入 Python 路径，便于从子目录直接运行本文件
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 from tools.general_tools import get_config_value
+
+# Alpha Vantage API Configuration
+ALPHA_VANTAGE_KEY = os.getenv("ALPHAADVANTAGE_API_KEY", "")
 
 all_nasdaq_100_symbols = [
     "NVDA", "MSFT", "AAPL", "GOOG", "GOOGL", "AMZN", "META", "AVGO", "TSLA",
@@ -47,144 +52,342 @@ def get_yesterday_date(today_date: str) -> str:
     yesterday_date = yesterday_dt.strftime("%Y-%m-%d")
     return yesterday_date
 
+def _get_price_from_local(symbol: str, date_str: str) -> Optional[Dict[str, float]]:
+    """
+    从本地 merged.jsonl 文件获取价格数据
+    
+    Args:
+        symbol: 股票代码
+        date_str: 日期字符串，格式 YYYY-MM-DD
+        
+    Returns:
+        价格数据字典，如果未找到则返回 None
+    """
+    # 查找 merged.jsonl 文件
+    data_file = project_root / "data" / "merged.jsonl"
+    if not data_file.exists():
+        return None
+    
+    try:
+        with open(data_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    doc = json.loads(line)
+                    meta = doc.get("Meta Data", {})
+                    if meta.get("2. Symbol") != symbol:
+                        continue
+                    
+                    series = doc.get("Time Series (Daily)", {})
+                    day_data = series.get(date_str)
+                    if day_data:
+                        return {
+                            "open": float(day_data.get("1. open", 0)),
+                            "high": float(day_data.get("2. high", 0)),
+                            "low": float(day_data.get("3. low", 0)),
+                            "close": float(day_data.get("4. close", 0)),
+                            "volume": int(day_data.get("5. volume", 0))
+                        }
+                except (json.JSONDecodeError, KeyError, ValueError):
+                    continue
+    except Exception as e:
+        print(f"⚠️  Error reading local data for {symbol}: {e}")
+    
+    return None
+
+def _save_price_to_local(symbol: str, date_str: str, price_data: Dict[str, float], full_api_response: Optional[Dict] = None) -> None:
+    """
+    将价格数据保存到本地 merged.jsonl 文件
+    
+    Args:
+        symbol: 股票代码
+        date_str: 日期字符串，格式 YYYY-MM-DD
+        price_data: 价格数据字典
+        full_api_response: 完整的 API 响应（可选，用于保存更多历史数据）
+    """
+    data_file = project_root / "data" / "merged.jsonl"
+    
+    # 确保 data 目录存在
+    data_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # 读取现有数据
+        existing_data = {}
+        if data_file.exists():
+            with open(data_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        doc = json.loads(line)
+                        meta = doc.get("Meta Data", {})
+                        if meta.get("2. Symbol") == symbol:
+                            existing_data = doc
+                            break
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+        
+        # 准备要保存的数据
+        if existing_data:
+            # 更新现有记录
+            series = existing_data.get("Time Series (Daily)", {})
+            # 使用 merged.jsonl 的格式：1. buy price 和 4. sell price
+            series[date_str] = {
+                "1. buy price": str(price_data.get("open", 0)),
+                "2. high": str(price_data.get("high", 0)),
+                "3. low": str(price_data.get("low", 0)),
+                "4. sell price": str(price_data.get("close", 0)),
+                "5. volume": str(price_data.get("volume", 0))
+            }
+            existing_data["Time Series (Daily)"] = series
+            # 更新最后刷新日期
+            if "Meta Data" in existing_data:
+                existing_data["Meta Data"]["3. Last Refreshed"] = date_str
+            
+            # 如果有完整的 API 响应，合并更多历史数据
+            if full_api_response:
+                api_series = full_api_response.get("Time Series (Daily)", {})
+                for api_date, api_day_data in api_series.items():
+                    if api_date not in series:
+                        series[api_date] = {
+                            "1. buy price": api_day_data.get("1. open", "0"),
+                            "2. high": api_day_data.get("2. high", "0"),
+                            "3. low": api_day_data.get("3. low", "0"),
+                            "4. sell price": api_day_data.get("4. close", "0"),
+                            "5. volume": api_day_data.get("5. volume", "0")
+                        }
+            
+            # 重写整个文件，更新该股票的数据
+            lines_to_write = []
+            updated = False
+            if data_file.exists():
+                with open(data_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if not line.strip():
+                            continue
+                        try:
+                            doc = json.loads(line)
+                            meta = doc.get("Meta Data", {})
+                            if meta.get("2. Symbol") == symbol:
+                                # 替换为更新后的数据
+                                lines_to_write.append(json.dumps(existing_data, ensure_ascii=False) + "\n")
+                                updated = True
+                            else:
+                                lines_to_write.append(line.rstrip() + "\n")
+                        except (json.JSONDecodeError, KeyError):
+                            lines_to_write.append(line.rstrip() + "\n")
+            
+            # 如果没找到现有记录，添加新行
+            if not updated:
+                lines_to_write.append(json.dumps(existing_data, ensure_ascii=False) + "\n")
+            
+            # 写入文件
+            with open(data_file, 'w', encoding='utf-8') as f:
+                f.writelines(lines_to_write)
+        else:
+            # 创建新记录
+            new_data = {
+                "Meta Data": {
+                    "1. Information": "Daily Prices (buy price, high, low, sell price) and Volumes",
+                    "2. Symbol": symbol,
+                    "3. Last Refreshed": date_str,
+                    "4. Output Size": "Compact",
+                    "5. Time Zone": "US/Eastern"
+                },
+                "Time Series (Daily)": {
+                    date_str: {
+                        "1. buy price": str(price_data.get("open", 0)),
+                        "2. high": str(price_data.get("high", 0)),
+                        "3. low": str(price_data.get("low", 0)),
+                        "4. sell price": str(price_data.get("close", 0)),
+                        "5. volume": str(price_data.get("volume", 0))
+                    }
+                }
+            }
+            
+            # 如果有完整的 API 响应，添加更多历史数据
+            if full_api_response:
+                api_series = full_api_response.get("Time Series (Daily)", {})
+                for api_date, api_day_data in api_series.items():
+                    if api_date != date_str:
+                        new_data["Time Series (Daily)"][api_date] = {
+                            "1. buy price": api_day_data.get("1. open", "0"),
+                            "2. high": api_day_data.get("2. high", "0"),
+                            "3. low": api_day_data.get("3. low", "0"),
+                            "4. sell price": api_day_data.get("4. close", "0"),
+                            "5. volume": api_day_data.get("5. volume", "0")
+                        }
+            
+            # 追加到文件
+            with open(data_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(new_data, ensure_ascii=False) + "\n")
+        
+        print(f"💾 Saved price data for {symbol} on {date_str} to local file")
+    except Exception as e:
+        print(f"⚠️  Error saving price data to local file for {symbol}: {e}")
+
+def _fetch_price_from_alpha_vantage(symbol: str, date_str: str, save_to_local: bool = True) -> Optional[Dict[str, float]]:
+    """Fetch price data from Alpha Vantage API and optionally save to local file"""
+    if not ALPHA_VANTAGE_KEY:
+        print(f"⚠️  Alpha Vantage API key not configured, cannot fetch price for {symbol}")
+        return None
+    
+    try:
+        url = "https://www.alphavantage.co/query"
+        params = {
+            "function": "TIME_SERIES_DAILY",
+            "symbol": symbol,
+            "outputsize": "compact",  # Get recent 100 days of data
+            "apikey": ALPHA_VANTAGE_KEY,
+            "datatype": "json"
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code != 200:
+            print(f"⚠️  API request failed for {symbol} with status {response.status_code}")
+            return None
+        
+        data = response.json()
+        
+        # Check for API errors
+        if "Error Message" in data:
+            print(f"⚠️  API error for {symbol}: {data['Error Message']}")
+            return None
+        
+        if "Note" in data:
+            print(f"⚠️  API rate limit reached for {symbol}: {data['Note']}")
+            return None
+        
+        # Extract time series data
+        time_series = data.get("Time Series (Daily)", {})
+        
+        if date_str in time_series:
+            day_data = time_series[date_str]
+            price_data = {
+                "open": float(day_data.get("1. open", 0)),
+                "high": float(day_data.get("2. high", 0)),
+                "low": float(day_data.get("3. low", 0)),
+                "close": float(day_data.get("4. close", 0)),
+                "volume": int(day_data.get("5. volume", 0))
+            }
+            
+            # Save to local file if requested
+            if save_to_local:
+                _save_price_to_local(symbol, date_str, price_data, data)
+            
+            return price_data
+        else:
+            # Try to find the closest trading day
+            available_dates = sorted(time_series.keys(), reverse=True)
+            if available_dates:
+                # Use the most recent date if exact date not found
+                closest_date = available_dates[0]
+                day_data = time_series[closest_date]
+                print(f"⚠️  Date {date_str} not found for {symbol}, using closest date {closest_date}")
+                price_data = {
+                    "open": float(day_data.get("1. open", 0)),
+                    "high": float(day_data.get("2. high", 0)),
+                    "low": float(day_data.get("3. low", 0)),
+                    "close": float(day_data.get("4. close", 0)),
+                    "volume": int(day_data.get("5. volume", 0))
+                }
+                
+                # Save to local file if requested (save with the requested date, not closest date)
+                if save_to_local:
+                    _save_price_to_local(symbol, date_str, price_data, data)
+                
+                return price_data
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️  API request failed for {symbol}: {e}")
+        return None
+    except Exception as e:
+        print(f"⚠️  Error fetching price for {symbol} from Alpha Vantage: {e}")
+        return None
+
 def get_open_prices(today_date: str, symbols: List[str], merged_path: Optional[str] = None) -> Dict[str, Optional[float]]:
-    """从 data/merged.jsonl 中读取指定日期与标的的开盘价。
+    """获取指定日期与标的的开盘价，优先使用本地数据，如果没有则从 Alpha Vantage API 获取。
 
     Args:
         today_date: 日期字符串，格式 YYYY-MM-DD。
         symbols: 需要查询的股票代码列表。
-        merged_path: 可选，自定义 merged.jsonl 路径；默认读取项目根目录下 data/merged.jsonl。
+        merged_path: 已废弃，保留以兼容旧代码。
 
     Returns:
         {symbol_price: open_price 或 None} 的字典；若未找到对应日期或标的，则值为 None。
     """
-    wanted = set(symbols)
     results: Dict[str, Optional[float]] = {}
-
-    if merged_path is None:
-        base_dir = Path(__file__).resolve().parents[1]
-        merged_file = base_dir / "data" / "merged.jsonl"
-    else:
-        merged_file = Path(merged_path)
-
-    if not merged_file.exists():
-        return results
-
-    with merged_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                doc = json.loads(line)
-            except Exception:
-                continue
-            meta = doc.get("Meta Data", {}) if isinstance(doc, dict) else {}
-            sym = meta.get("2. Symbol")
-            if sym not in wanted:
-                continue
-            series = doc.get("Time Series (Daily)", {})
-            if not isinstance(series, dict):
-                continue
-            bar = series.get(today_date)
-            if isinstance(bar, dict):
-                open_val = bar.get("1. buy price")
-                try:
-                    results[f'{sym}_price'] = float(open_val) if open_val is not None else None
-                except Exception:
-                    results[f'{sym}_price'] = None
-
+    local_count = 0
+    api_count = 0
+    
+    print(f"📊 Fetching open prices for {len(symbols)} stocks on {today_date}...")
+    
+    # Fetch prices for each symbol, prioritizing local data
+    for symbol in symbols:
+        # First try local data
+        price_data = _get_price_from_local(symbol, today_date)
+        if price_data and price_data.get("open"):
+            results[f'{symbol}_price'] = price_data["open"]
+            local_count += 1
+        else:
+            # Fall back to API if local data not found
+            price_data = _fetch_price_from_alpha_vantage(symbol, today_date)
+            if price_data and price_data.get("open"):
+                results[f'{symbol}_price'] = price_data["open"]
+                api_count += 1
+                # Add delay to avoid rate limiting (only after API calls)
+                time.sleep(0.45)  # 450ms delay between API requests
+            else:
+                results[f'{symbol}_price'] = None
+    
+    print(f"✅ Price fetch complete: {local_count} from local, {api_count} from API, {len(symbols) - local_count - api_count} missing")
     return results
 
 def get_yesterday_open_and_close_price(today_date: str, symbols: List[str], merged_path: Optional[str] = None) -> tuple[Dict[str, Optional[float]], Dict[str, Optional[float]]]:
-    """从 data/merged.jsonl 中读取指定日期与股票的昨日买入价和卖出价。
+    """获取指定日期与股票的昨日开盘价和收盘价，优先使用本地数据，如果没有则从 Alpha Vantage API 获取。
 
     Args:
         today_date: 日期字符串，格式 YYYY-MM-DD，代表今天日期。
         symbols: 需要查询的股票代码列表。
-        merged_path: 可选，自定义 merged.jsonl 路径；默认读取项目根目录下 data/merged.jsonl。
+        merged_path: 已废弃，保留以兼容旧代码。
 
     Returns:
-        (买入价字典, 卖出价字典) 的元组；若未找到对应日期或标的，则值为 None。
+        (开盘价字典, 收盘价字典) 的元组；若未找到对应日期或标的，则值为 None。
     """
-    wanted = set(symbols)
     buy_results: Dict[str, Optional[float]] = {}
     sell_results: Dict[str, Optional[float]] = {}
-
-    if merged_path is None:
-        base_dir = Path(__file__).resolve().parents[1]
-        merged_file = base_dir / "data" / "merged.jsonl"
-    else:
-        merged_file = Path(merged_path)
-
-    if not merged_file.exists():
-        return buy_results, sell_results
-
+    
     yesterday_date = get_yesterday_date(today_date)
-
-    with merged_file.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                doc = json.loads(line)
-            except Exception:
-                continue
-            meta = doc.get("Meta Data", {}) if isinstance(doc, dict) else {}
-            sym = meta.get("2. Symbol")
-            if sym not in wanted:
-                continue
-            series = doc.get("Time Series (Daily)", {})
-            if not isinstance(series, dict):
-                continue
-            
-            # 尝试获取昨日买入价和卖出价
-            bar = series.get(yesterday_date)
-            if isinstance(bar, dict):
-                buy_val = bar.get("1. buy price")  # 买入价字段
-                sell_val = bar.get("4. sell price")  # 卖出价字段
-                
-                try:
-                    buy_price = float(buy_val) if buy_val is not None else None
-                    sell_price = float(sell_val) if sell_val is not None else None
-                    buy_results[f'{sym}_price'] = buy_price
-                    sell_results[f'{sym}_price'] = sell_price
-                except Exception:
-                    buy_results[f'{sym}_price'] = None
-                    sell_results[f'{sym}_price'] = None
+    local_count = 0
+    api_count = 0
+    
+    print(f"📊 Fetching yesterday's prices for {len(symbols)} stocks (date: {yesterday_date})...")
+    
+    # Fetch prices for each symbol, prioritizing local data
+    for symbol in symbols:
+        # First try local data
+        price_data = _get_price_from_local(symbol, yesterday_date)
+        if price_data:
+            buy_results[f'{symbol}_price'] = price_data.get("open")
+            sell_results[f'{symbol}_price'] = price_data.get("close")
+            local_count += 1
+        else:
+            # Fall back to API if local data not found
+            price_data = _fetch_price_from_alpha_vantage(symbol, yesterday_date)
+            if price_data:
+                buy_results[f'{symbol}_price'] = price_data.get("open")
+                sell_results[f'{symbol}_price'] = price_data.get("close")
+                api_count += 1
+                # Add delay to avoid rate limiting (only after API calls)
+                time.sleep(0.45)  # 450ms delay between API requests
             else:
-                # 如果昨日没有数据，尝试向前查找最近的交易日
-                today_dt = datetime.strptime(today_date, "%Y-%m-%d")
-                yesterday_dt = today_dt - timedelta(days=1)
-                current_date = yesterday_dt
-                found_data = False
-                
-                # 最多向前查找5个交易日
-                for _ in range(5):
-                    current_date -= timedelta(days=1)
-                    # 跳过周末
-                    while current_date.weekday() >= 5:
-                        current_date -= timedelta(days=1)
-                    
-                    check_date = current_date.strftime("%Y-%m-%d")
-                    bar = series.get(check_date)
-                    if isinstance(bar, dict):
-                        buy_val = bar.get("1. buy price")
-                        sell_val = bar.get("4. sell price")
-                        
-                        try:
-                            buy_price = float(buy_val) if buy_val is not None else None
-                            sell_price = float(sell_val) if sell_val is not None else None
-                            buy_results[f'{sym}_price'] = buy_price
-                            sell_results[f'{sym}_price'] = sell_price
-                            found_data = True
-                            break
-                        except Exception:
-                            continue
-                
-                if not found_data:
-                    buy_results[f'{sym}_price'] = None
-                    sell_results[f'{sym}_price'] = None
-
+                buy_results[f'{symbol}_price'] = None
+                sell_results[f'{symbol}_price'] = None
+    
+    print(f"✅ Yesterday's price fetch complete: {local_count} from local, {api_count} from API, {len(symbols) - local_count - api_count} missing")
     return buy_results, sell_results
 
 def get_yesterday_profit(today_date: str, yesterday_buy_prices: Dict[str, Optional[float]], yesterday_sell_prices: Dict[str, Optional[float]], yesterday_init_position: Dict[str, float]) -> Dict[str, float]:

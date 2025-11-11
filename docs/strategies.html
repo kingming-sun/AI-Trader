@@ -8,85 +8,61 @@
     <script src="api-config.js"></script>
     <style>
         .strategy-container {
-            max-width: 1400px;
+            max-width: 100%;
             margin: 0 auto;
             padding: 2rem;
-        }
-        
-        .strategy-workflow {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            border: 1px solid var(--border-color);
-        }
-        
-        .workflow-steps {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1.5rem;
-            position: relative;
-        }
-        
-        .workflow-step {
-            flex: 1;
-            text-align: center;
-            position: relative;
-            padding: 1rem;
-            border-radius: 8px;
-            transition: all var(--transition-normal);
-        }
-        
-        .workflow-step.active {
-            background: rgba(0, 212, 255, 0.1);
-            border: 2px solid var(--accent-blue);
-        }
-        
-        .workflow-step.completed {
-            background: rgba(72, 187, 120, 0.1);
-            border: 2px solid var(--success);
-        }
-        
-        .step-number {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--secondary-bg);
-            border: 2px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 0.5rem;
-            font-weight: 600;
-        }
-        
-        .workflow-step.active .step-number {
-            background: var(--accent-blue);
-            border-color: var(--accent-blue);
-            color: white;
-        }
-        
-        .workflow-step.completed .step-number {
-            background: var(--success);
-            border-color: var(--success);
-            color: white;
+            width: 100%;
         }
         
         .strategy-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
+            width: 100%;
+        }
+        
+        /* 响应式布局 - 根据屏幕宽度自动调整列数 */
+        @media (min-width: 640px) {
+            .strategy-list {
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            }
+        }
+        
+        @media (min-width: 768px) {
+            .strategy-list {
+                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .strategy-list {
+                grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            }
+        }
+        
+        @media (min-width: 1280px) {
+            .strategy-list {
+                grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            }
+        }
+        
+        @media (min-width: 1536px) {
+            .strategy-list {
+                grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            }
         }
         
         .strategy-card {
             background: var(--card-bg);
             border-radius: 12px;
-            padding: 1.5rem;
+            padding: 1.25rem;
             border: 1px solid var(--border-color);
             transition: all var(--transition-normal);
             cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            min-width: 0; /* 防止内容溢出 */
         }
         
         .strategy-card:hover {
@@ -99,7 +75,33 @@
             display: flex;
             justify-content: space-between;
             align-items: start;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .strategy-title-section {
+            flex: 1;
+        }
+        
+        .paw-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+        
+        .strategy-name {
+            margin: 0 0 0.25rem 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .strategy-assets {
+            margin: 0;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
         }
         
         .strategy-status {
@@ -137,7 +139,9 @@
         .strategy-actions {
             display: flex;
             gap: 0.5rem;
-            margin-top: 1rem;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
         }
         
         .btn-small {
@@ -186,6 +190,166 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
         }
+        
+        .strategy-metrics {
+            margin-top: 0.5rem;
+            flex: 1;
+            padding-top: 0.5rem;
+        }
+        
+        .strategy-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .footer-metric {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .footer-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+        
+        .footer-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .footer-value.positive {
+            color: var(--success);
+        }
+        
+        .footer-value.negative {
+            color: var(--danger);
+        }
+        
+        .metric-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .metric-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .metric-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .metric-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .metric-value.positive {
+            color: var(--success);
+        }
+        
+        .metric-value.negative {
+            color: var(--danger);
+        }
+        
+        .chart-container {
+            margin: 0.75rem 0;
+            padding: 0;
+            background: transparent;
+            border-radius: 6px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .chart-container canvas {
+            width: 100%;
+            height: 80px;
+            display: block;
+            max-width: 100%;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+        }
+        
+        .holdings-info {
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background: rgba(0, 212, 255, 0.05);
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+        
+        .holdings-label {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            margin-bottom: 0.2rem;
+        }
+        
+        .holdings-list {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        
+        .allocation-info {
+            margin: 0.5rem 0 0.25rem 0;
+        }
+        
+        .allocation-bar {
+            display: flex;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: var(--secondary-bg);
+            margin-bottom: 0.5rem;
+        }
+        
+        .allocation-segment {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        
+        .allocation-segment.stock {
+            background: var(--accent-blue);
+        }
+        
+        .allocation-segment.cash {
+            background: var(--text-muted);
+        }
+        
+        .allocation-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .strategy-no-data {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -209,33 +373,6 @@
                 <p class="subtitle">创建、管理和运行交易策略，通过回测 → 模拟 → 实盘工作流程</p>
             </header>
 
-            <!-- Workflow Visualization -->
-            <section class="strategy-workflow">
-                <h3>策略工作流</h3>
-                <div class="workflow-steps">
-                    <div class="workflow-step" id="step-design">
-                        <div class="step-number">1</div>
-                        <div class="step-title">策略设计</div>
-                        <div class="step-desc">配置参数和提示词</div>
-                    </div>
-                    <div class="workflow-step" id="step-backtest">
-                        <div class="step-number">2</div>
-                        <div class="step-title">回测</div>
-                        <div class="step-desc">使用历史数据验证</div>
-                    </div>
-                    <div class="workflow-step" id="step-simulate">
-                        <div class="step-number">3</div>
-                        <div class="step-title">模拟</div>
-                        <div class="step-desc">使用实时数据测试</div>
-                    </div>
-                    <div class="workflow-step" id="step-real">
-                        <div class="step-number">4</div>
-                        <div class="step-title">实盘交易</div>
-                        <div class="step-desc">使用真实资金部署</div>
-                    </div>
-                </div>
-            </section>
-
             <!-- Strategy List -->
             <section>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
@@ -254,7 +391,7 @@
         <p>AI-Trader &copy; 2025 | AI驱动交易代理基准测试</p>
     </footer>
 
-    <script src="assets/js/strategy-manager.js?v=2"></script>
+    <script src="assets/js/strategy-manager.js?v=4"></script>
 </body>
 </html>
 

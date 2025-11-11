@@ -70,5 +70,31 @@ dmypy.json
 *.json
 *.jsonl
 *.jsonc
-# 例外：允许 data/merged.jsonl 被跟踪
+
+# 例外：允许价格数据文件被跟踪
 !data/merged.jsonl
+!data/merged.jsonl.backup
+!data/daily_prices_*.json
+!data/intraday_prices_*.json
+!data/news.json
+!data/*.py
+
+# 允许配置文件但忽略运行时配置
+!configs/*.json
+!configs/**/*.json
+configs/runtime_*.json
+
+# 但仍然忽略日志中的 JSON 文件
+logs/*.json
+logs/*.jsonl
+
+# 忽略策略运行时生成的数据
+data/strategies/*/backtest/agent_data/**/*.jsonl
+data/strategies/*/backtest/log/**/*.log
+data/strategies/*/backtest/log/**/*.json
+data/strategies/*/simulate/agent_data/**/*.jsonl
+data/strategies/*/real/agent_data/**/*.jsonl
+
+# 忽略测试数据
+data/test_strategy/
+data/agent_data/

@@ -514,9 +514,23 @@ class RunManager:
             
             data_path = self.strategy_manager.get_strategy_data_path(strategy_id, mode)
             progress_info = self._get_progress_info(strategy_id, mode, data_path)
-            results = self.get_run_results(strategy_id, mode)
             
-            if results:
+            # 优化：只检查结果文件是否存在，不加载完整结果数据（减少开销）
+            # 检查是否有结果文件存在
+            has_results = False
+            asset_file = data_path / "asset_evolution.json"
+            portfolio_file = data_path / "portfolio.json"
+            if asset_file.exists() or portfolio_file.exists():
+                # 快速检查文件是否有内容（只读取文件大小，不解析JSON）
+                try:
+                    if asset_file.exists() and asset_file.stat().st_size > 10:  # 至少10字节
+                        has_results = True
+                    elif portfolio_file.exists() and portfolio_file.stat().st_size > 10:
+                        has_results = True
+                except:
+                    pass
+            
+            if has_results:
                 # 回测已完成，保持策略状态为"backtest"（前端会根据回测状态显示"回测结束"）
                 if mode == "backtest":
                     print(f"✅ 回测已完成，策略 {strategy_id} 回测结束")
@@ -978,18 +992,12 @@ class RunManager:
                 stdout_log_file = strategy_log_dir / f"{strategy_id}_{mode}.log"
                 if stdout_log_file.exists():
                     try:
-                        # Read last few lines from stdout log
+                        # Read all content from stdout log (backtest.log)
                         with open(stdout_log_file, 'r', encoding='utf-8') as f:
-                            lines = f.readlines()
-                            if lines:
-                                # Get the last non-empty line
-                                for line in reversed(lines):
-                                    line = line.strip()
-                                    if line and not line.startswith('#'):
-                                        # Truncate if too long
-                                        if len(line) > 300:
-                                            line = line[:300] + "..."
-                                        return line
+                            content = f.read()
+                            if content:
+                                # Return all content (no truncation for full log display)
+                                return content.strip()
                     except Exception as e:
                         print(f"Error reading stdout log: {e}")
             

@@ -295,6 +295,7 @@ async def main(config_path=None):
         print("🎉 All models processing completed!")
     
     finally:
+        pass
     
 if __name__ == "__main__":
     import sys

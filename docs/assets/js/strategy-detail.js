@@ -1900,7 +1900,7 @@ class StrategyDetail {
                 }
                 
                 // Update progress text if element exists
-                const progressText = statusDisplay.querySelector('.progress-text');
+                const progressText = container ? container.querySelector('.progress-text') : null;
                 if (progressText) {
                     progressText.textContent = `${progress}%`;
                 } else if (statusMessage) {
@@ -1926,36 +1926,26 @@ class StrategyDetail {
                 container.style.display = 'block';
             }
             
-            // Update log content (only add new logs, avoid duplicates)
+            // Update log content - display full log content
             if (logContent) {
-                // Remove "等待日志输出..." message if we have logs
-                if (status.latest_log) {
-                    const currentContent = logContent.innerHTML;
+                if (status.latest_log && status.latest_log.trim()) {
                     const logText = status.latest_log.trim();
                     
-                    // Check if this is the "等待日志输出..." placeholder
-                    if (currentContent.includes('等待日志输出')) {
-                        logContent.innerHTML = ''; // Clear placeholder
-                    }
+                    // Replace entire content with full log (preserve line breaks)
+                    const logDiv = document.createElement('div');
+                    logDiv.style.cssText = 'color: var(--accent-cyan); white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.85rem; line-height: 1.5;';
+                    logDiv.textContent = logText;
+                    logContent.innerHTML = '';
+                    logContent.appendChild(logDiv);
                     
-                    // Only add if it's a new log (simple check - not already in content)
-                    if (!currentContent.includes(logText.substring(0, 50))) {
-                        const timestamp = new Date().toLocaleTimeString('zh-CN');
-                        const logEntry = `[${timestamp}] ${logText}`;
-                        const logDiv = document.createElement('div');
-                        logDiv.style.cssText = 'color: var(--accent-cyan); margin-bottom: 0.5rem; font-family: monospace;';
-                        logDiv.textContent = logEntry;
-                        logContent.appendChild(logDiv);
-                        
-                        // Auto scroll to bottom
-                        const logContainer = document.getElementById('runLogContainer');
-                        if (logContainer) {
-                            logContainer.scrollTop = logContainer.scrollHeight;
-                        }
+                    // Auto scroll to bottom to show latest content
+                    const logContainer = document.getElementById('runLogContainer');
+                    if (logContainer) {
+                        logContainer.scrollTop = logContainer.scrollHeight;
                     }
-                } else if (logContent.innerHTML.trim() === '' || logContent.innerHTML.includes('等待日志输出')) {
+                } else {
                     // Keep "等待日志输出..." if no logs yet
-                    if (!logContent.innerHTML.includes('等待日志输出')) {
+                    if (logContent.innerHTML.trim() === '' || !logContent.innerHTML.includes('等待日志输出')) {
                         logContent.innerHTML = '<div style="color: var(--text-muted);">等待日志输出...</div>';
                     }
                 }

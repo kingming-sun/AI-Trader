@@ -1,6 +1,7 @@
 #!/bin/bash
 # AI-Trader MCP Services Restart Script
-# Only restarts MCP services (Math, Search, Trade, Price) without affecting other services
+# Only restarts local MCP services (Math, Trade) without affecting other services
+# Note: Search and LocalPrices are replaced by Alpha Vantage MCP server
 
 echo "╔════════════════════════════════════════════╗"
 echo "║      🔄 MCP Services Restart                ║"
@@ -25,8 +26,9 @@ pkill -f "start_mcp_services.py" 2>/dev/null || true
 
 echo "  Stopping individual MCP services..."
 pkill -f "tool_math.py" 2>/dev/null || true
-pkill -f "tool_jina_search.py" 2>/dev/null || true
 pkill -f "tool_trade.py" 2>/dev/null || true
+# Legacy services (no longer used, but kept for cleanup)
+pkill -f "tool_jina_search.py" 2>/dev/null || true
 pkill -f "tool_get_price_local.py" 2>/dev/null || true
 
 # Wait for processes to fully stop
@@ -36,7 +38,8 @@ sleep 2
 echo ""
 echo "🔍 Verifying MCP ports are free..."
 PORTS_FREE=true
-for port in 8000 8001 8002 8003; do
+# Note: Ports 8001 and 8003 are no longer needed
+for port in 8000 8002; do
     if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
         echo -e "  ${YELLOW}⚠${NC}  Port $port is still in use, forcing cleanup..."
         lsof -ti :$port | xargs kill -9 2>/dev/null || true
@@ -95,7 +98,8 @@ echo ""
 mkdir -p logs
 
 # Start MCP services
-echo "Starting MCP Services (Math, Search, Trade, Price)..."
+echo "Starting MCP Services (Math, Trade)..."
+echo "   Note: Search and Price replaced by Alpha Vantage MCP server"
 cd agent_tools
 nohup python start_mcp_services.py > ../logs/mcp_services.log 2>&1 &
 MCP_PID=$!
@@ -104,9 +108,7 @@ sleep 3
 
 # Wait for services to be ready
 wait_for_service "http://localhost:8000" "Math Service"
-wait_for_service "http://localhost:8001" "Search Service"
 wait_for_service "http://localhost:8002" "Trade Service"
-wait_for_service "http://localhost:8003" "Price Service"
 
 echo ""
 echo "╔════════════════════════════════════════════╗"
@@ -118,9 +120,8 @@ echo "┌───────────────────────�
 echo "│ Service          │ Port  │ Status  │ PID                   │"
 echo "├─────────────────────────────────────────────────────────────┤"
 printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Math" "8000" "Active" "$MCP_PID"
-printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Search" "8001" "Active" "-"
+printf "│ %-16s │ %-5s │ ${CYAN}%-7s${NC} │ %-21s │\n" "Alpha Vantage" "Remote" "Active" "MCP Server"
 printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Trade" "8002" "Active" "-"
-printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Price" "8003" "Active" "-"
 echo "└─────────────────────────────────────────────────────────────┘"
 echo ""
 echo "📝 Logs: logs/mcp_services.log"

@@ -50,7 +50,8 @@ wait_for_service() {
 # Check required ports
 echo "📍 Checking port availability..."
 PORTS_OK=true
-for port in 8000 8001 8002 8003 8004 8005 8080; do
+# Note: Ports 8001 and 8003 are no longer needed (replaced by Alpha Vantage MCP)
+for port in 8000 8002 8004 8005 8080; do
     if ! check_port $port; then
         PORTS_OK=false
     fi
@@ -88,16 +89,15 @@ echo "🚀 Starting services..."
 echo ""
 
 # Step 1: MCP Services
-echo "1️⃣  Starting MCP Services (Math, Search, Trade, Price)..."
+echo "1️⃣  Starting MCP Services (Math, Trade)..."
+echo "   Note: Search and Price replaced by Alpha Vantage MCP server"
 cd agent_tools
 nohup python start_mcp_services.py > ../logs/mcp_services.log 2>&1 &
 MCP_PID=$!
 cd ..
 sleep 3
 wait_for_service "http://localhost:8000" "Math Service"
-wait_for_service "http://localhost:8001" "Search Service"
 wait_for_service "http://localhost:8002" "Trade Service"
-wait_for_service "http://localhost:8003" "Price Service"
 echo ""
 
 # Step 2: Config API
@@ -139,9 +139,8 @@ echo "┌───────────────────────�
 echo "│ Service          │ Port  │ Status  │ PID                   │"
 echo "├─────────────────────────────────────────────────────────────┤"
 printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Math" "8000" "Active" "$MCP_PID"
-printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Search" "8001" "Active" "-"
+printf "│ %-16s │ %-5s │ ${CYAN}%-7s${NC} │ %-21s │\n" "Alpha Vantage" "Remote" "Active" "MCP Server"
 printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Trade" "8002" "Active" "-"
-printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "MCP Price" "8003" "Active" "-"
 printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "Config API" "8004" "Active" "$CONFIG_API_PID"
 printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "Strategy API" "8005" "Active" "$STRATEGY_API_PID"
 printf "│ %-16s │ %-5s │ ${GREEN}%-7s${NC} │ %-21s │\n" "Web Frontend" "8080" "Active" "$FRONTEND_PID"

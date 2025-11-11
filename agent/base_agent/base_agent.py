@@ -126,24 +126,32 @@ class BaseAgent:
         
     def _get_default_mcp_config(self) -> Dict[str, Dict[str, Any]]:
         """Get default MCP configuration"""
-        return {
+        # Get Alpha Vantage API key from environment
+        alpha_vantage_key = os.getenv("ALPHAADVANTAGE_API_KEY", "")
+        
+        config = {
             "math": {
                 "transport": "streamable_http",
                 "url": f"http://localhost:{os.getenv('MATH_HTTP_PORT', '8000')}/mcp",
-            },
-            "stock_local": {
-                "transport": "streamable_http",
-                "url": f"http://localhost:{os.getenv('GETPRICE_HTTP_PORT', '8003')}/mcp",
-            },
-            "search": {
-                "transport": "streamable_http",
-                "url": f"http://localhost:{os.getenv('SEARCH_HTTP_PORT', '8001')}/mcp",
             },
             "trade": {
                 "transport": "streamable_http",
                 "url": f"http://localhost:{os.getenv('TRADE_HTTP_PORT', '8002')}/mcp",
             },
         }
+        
+        # Add Alpha Vantage MCP server for price data and market information
+        # Reference: https://github.com/alphavantage/alpha_vantage_mcp/blob/main/examples/agent/README.md
+        if alpha_vantage_key:
+            config["alphavantage"] = {
+                "transport": "streamable_http",  # streamable_http transport for remote HTTP MCP servers
+                "url": f"https://mcp.alphavantage.co/mcp?apikey={alpha_vantage_key}",
+            }
+            print(f"✅ Alpha Vantage MCP server configured (replaces LocalPrices and Search)")
+        else:
+            print("⚠️  ALPHAADVANTAGE_API_KEY not set, Alpha Vantage MCP server not available")
+        
+        return config
     
     async def initialize(self) -> None:
         """Initialize MCP client and AI model"""
@@ -151,11 +159,113 @@ class BaseAgent:
         
         try:
             # Create MCP client
+            print(f"📡 Connecting to MCP servers: {list(self.mcp_config.keys())}")
             self.client = MultiServerMCPClient(self.mcp_config)
             
-            # Get tools
+            # Get tools from all MCP servers
             self.tools = await self.client.get_tools()
-            print(f"✅ Loaded {len(self.tools)} MCP tools")
+            
+            # Display detailed tool information
+            print(f"✅ Loaded {len(self.tools)} MCP tools from all servers")
+            
+            # Group tools by server for better visibility
+            tool_info = {}
+            for tool in self.tools:
+                # Try multiple ways to get tool name (LangChain tools may have different structures)
+                tool_name = None
+                if hasattr(tool, 'name'):
+                    tool_name = tool.name
+                elif hasattr(tool, '__name__'):
+                    tool_name = tool.__name__
+                elif hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+                    tool_name = tool.func.__name__
+                else:
+                    tool_name = str(tool)
+                
+                # Also check description for Alpha Vantage patterns
+                tool_desc = ""
+                if hasattr(tool, 'description'):
+                    tool_desc = str(tool.description).upper()
+                elif hasattr(tool, 'func') and hasattr(tool.func, '__doc__'):
+                    tool_desc = str(tool.func.__doc__ or "").upper()
+                
+                tool_name_upper = str(tool_name).upper()
+                
+                # Identify tool source based on name and description patterns
+                if any(keyword in tool_name_upper or keyword in tool_desc for keyword in 
+                       ['TIME_SERIES', 'RSI', 'MACD', 'BBANDS', 'SMA', 'EMA', 'GDP', 'CPI', 
+                        'INFLATION', 'ALPHA_VANTAGE', 'ALPHAVANTAGE', 'STOCK', 'QUOTE', 
+                        'CURRENCY', 'CRYPTO', 'ECONOMIC', 'INDICATOR']):
+                    tool_info.setdefault('alphavantage', []).append(str(tool_name))
+                elif tool_name in ['add', 'multiply'] or 'math' in tool_name_upper:
+                    tool_info.setdefault('math', []).append(str(tool_name))
+                elif tool_name in ['buy', 'sell'] or 'trade' in tool_name_upper:
+                    tool_info.setdefault('trade', []).append(str(tool_name))
+                else:
+                    tool_info.setdefault('other', []).append(str(tool_name))
+            
+            # Print tool summary
+            if tool_info:
+                print("📋 Tools by source:")
+                for source, tools in sorted(tool_info.items()):
+                    tool_list = tools[:10]  # Show first 10 tools
+                    print(f"   {source}: {len(tools)} tools")
+                    if tool_list:
+                        print(f"      Examples: {', '.join(tool_list)}{'...' if len(tools) > 10 else ''}")
+            
+            # Verify Alpha Vantage tools are loaded
+            alpha_vantage_tools = tool_info.get('alphavantage', [])
+            if alpha_vantage_tools:
+                print(f"✅ Alpha Vantage MCP tools loaded: {len(alpha_vantage_tools)} tools")
+            elif 'alphavantage' in self.mcp_config:
+                print("⚠️  Warning: Alpha Vantage MCP configured but no tools detected")
+                print("   This may indicate a connection issue. Check ALPHAADVANTAGE_API_KEY environment variable.")
+            
+            # Filter tools to reduce token usage - only keep essential tools
+            # This is critical to avoid exceeding model's context window (131k tokens)
+            essential_tool_names = {
+                # Trading tools (required)
+                'buy', 'sell',
+                # Core price data tools (required for analysis)
+                'TIME_SERIES_DAILY', 'GLOBAL_QUOTE', 'TIME_SERIES_DAILY_ADJUSTED',
+                # Technical indicators (useful but optional)
+                'RSI', 'MACD', 'SMA', 'EMA', 'BBANDS',
+                # Market data
+                'SYMBOL_SEARCH', 'MARKET_STATUS', 'NEWS_SENTIMENT',
+                # Math tools
+                'add', 'multiply'
+            }
+            
+            original_tool_count = len(self.tools)
+            filtered_tools = []
+            
+            for tool in self.tools:
+                tool_name = None
+                if hasattr(tool, 'name'):
+                    tool_name = tool.name
+                elif hasattr(tool, '__name__'):
+                    tool_name = tool.__name__
+                elif hasattr(tool, 'func') and hasattr(tool.func, '__name__'):
+                    tool_name = tool.func.__name__
+                
+                # Use exact match instead of substring match to avoid false positives
+                # Convert both to uppercase for case-insensitive comparison
+                if tool_name:
+                    tool_name_upper = str(tool_name).upper()
+                    essential_names_upper = {name.upper() for name in essential_tool_names}
+                    
+                    # Check for exact match
+                    if tool_name_upper in essential_names_upper:
+                        filtered_tools.append(tool)
+            
+            if len(filtered_tools) > 0:
+                self.tools = filtered_tools
+                print(f"🔧 Filtered tools: {original_tool_count} → {len(self.tools)} (kept {len(self.tools)/original_tool_count*100:.0f}% essential tools)")
+                print(f"   This reduces context usage and prevents token limit errors")
+            else:
+                print(f"⚠️  Warning: Tool filtering resulted in 0 tools, keeping all {original_tool_count} tools")
+                print(f"   This may cause token limit issues. Consider using a model with larger context window.")
+                
         except Exception as e:
             print(f"❌ Failed to initialize MCP client: {e}")
             print(f"   Error type: {type(e).__name__}")
@@ -195,20 +305,171 @@ class BaseAgent:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
     
+    def _extract_tool_calls_info(self, response: Any) -> List[Dict[str, Any]]:
+        """Extract detailed tool call information from agent response"""
+        tool_calls_info = []
+        
+        def get_field(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+        
+        def get_nested(obj, path, default=None):
+            current = obj
+            for key in path:
+                current = get_field(current, key, None)
+                if current is None:
+                    return default
+            return current
+        
+        # Get messages from response
+        messages = get_field(response, "messages", []) or []
+        
+        for msg in messages:
+            # Check for tool calls in additional_kwargs
+            additional_kwargs = get_field(msg, "additional_kwargs", {}) or {}
+            tool_calls = get_field(additional_kwargs, "tool_calls", None)
+            
+            if tool_calls and isinstance(tool_calls, list):
+                for tool_call in tool_calls:
+                    tool_info = {
+                        "tool_name": get_field(tool_call, "name", "unknown"),
+                        "tool_call_id": get_field(tool_call, "id", "unknown"),
+                        "arguments": get_field(tool_call, "args", {}),
+                    }
+                    tool_calls_info.append(tool_info)
+            
+            # Also check for tool_call_id in the message itself (tool response)
+            tool_call_id = get_field(msg, "tool_call_id")
+            tool_name = get_field(msg, "name")
+            if tool_call_id or tool_name:
+                # This is a tool response, we already logged the call above
+                # But we can add execution info here if needed
+                pass
+        
+        return tool_calls_info
+    
     async def _ainvoke_with_retry(self, message: List[Dict[str, str]]) -> Any:
         """Agent invocation with retry"""
+        print(f"📤 [DEBUG] Starting _ainvoke_with_retry")
+        print(f"   Message count: {len(message)}")
+        
+        # Estimate token count (rough: 1 token ≈ 4 characters)
+        total_chars = sum(len(str(msg.get('content', ''))) for msg in message)
+        estimated_tokens = total_chars // 4
+        print(f"   Estimated tokens: ~{estimated_tokens:,} (limit: 131,072)")
+        
         for attempt in range(1, self.max_retries + 1):
             try:
-                return await self.agent.ainvoke(
+                print(f"📤 [DEBUG] Calling agent.ainvoke (Attempt {attempt}/{self.max_retries})...")
+                print(f"   Input message structure: {[msg.get('role', 'unknown') for msg in message]}")
+                
+                result = await self.agent.ainvoke(
                     {"messages": message}, 
                     {"recursion_limit": 100}
                 )
+                
+                print(f"✅ [DEBUG] Agent.ainvoke completed successfully")
+                print(f"   Response type: {type(result)}")
+                if hasattr(result, 'keys'):
+                    print(f"   Response keys: {list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+                
+                return result
             except Exception as e:
+                error_msg = str(e)
+                error_str = repr(e)
+                error_type = type(e).__name__
+                
+                print(f"❌ [DEBUG] Exception in _ainvoke_with_retry (Attempt {attempt}/{self.max_retries}):")
+                print(f"   Error Type: {error_type}")
+                print(f"   Error Message: {error_msg[:500]}")
+                print(f"   Error String: {error_str[:500]}")
+                
+                # Check for token limit errors
+                if "token" in error_msg.lower() or "context length" in error_msg.lower() or "maximum context" in error_msg.lower():
+                    print(f"⚠️  [DEBUG] Token limit error detected!")
+                    import re
+                    token_match = re.search(r'(\d+)\s*tokens', error_msg, re.IGNORECASE)
+                    limit_match = re.search(r'maximum.*?(\d+)', error_msg, re.IGNORECASE)
+                    if token_match:
+                        print(f"   Requested tokens: {token_match.group(1)}")
+                    if limit_match:
+                        print(f"   Maximum tokens: {limit_match.group(1)}")
+                    print(f"   Current message count: {len(message)}")
+                    if len(message) > 10:
+                        print(f"   💡 Suggestion: Reduce message history (currently {len(message)} messages)")
+                
+                # Enhanced error logging for API rate limits
+                elif "rate limit" in error_msg.lower() or "429" in error_msg or "too many requests" in error_msg.lower() or "rate_limit" in error_str.lower():
+                    # Try to extract which API/service is rate limited
+                    api_name = "Unknown API"
+                    if "alphavantage" in error_msg.lower() or "alpha_vantage" in error_str.lower():
+                        api_name = "Alpha Vantage MCP"
+                    elif "openai" in error_msg.lower() or "openai" in error_str.lower():
+                        api_name = "OpenAI API"
+                    elif "deepseek" in error_msg.lower() or "deepseek" in error_str.lower():
+                        api_name = "DeepSeek API"
+                    elif "mcp" in error_msg.lower() or "mcp" in error_str.lower():
+                        api_name = "MCP Server (check tool response for details)"
+                    
+                    print(f"⚠️  API Rate Limit Error (Attempt {attempt}/{self.max_retries}):")
+                    print(f"   API Service: {api_name}")
+                    print(f"   Error Message: {error_msg}")
+                    print(f"   Error Type: {type(e).__name__}")
+                    if hasattr(e, 'response') or hasattr(e, 'body'):
+                        try:
+                            if hasattr(e, 'response'):
+                                print(f"   Response: {e.response}")
+                            if hasattr(e, 'body'):
+                                print(f"   Body: {e.body}")
+                        except:
+                            pass
+                
                 if attempt == self.max_retries:
+                    print(f"❌ [DEBUG] All {self.max_retries} attempts failed, raising exception")
+                    import traceback
+                    print(f"   Full traceback:")
+                    traceback.print_exc()
                     raise e
-                print(f"⚠️ Attempt {attempt} failed, retrying after {self.base_delay * attempt} seconds...")
-                print(f"Error details: {e}")
+                print(f"⚠️ [DEBUG] Attempt {attempt} failed, retrying after {self.base_delay * attempt} seconds...")
+                print(f"   Error details: {error_msg[:200]}")
                 await asyncio.sleep(self.base_delay * attempt)
+    
+    def _truncate_message_content(self, content: str, max_length: int = 5000) -> str:
+        """
+        Truncate message content if it exceeds max_length
+        
+        Args:
+            content: Message content to truncate
+            max_length: Maximum length in characters
+            
+        Returns:
+            Truncated content with indicator
+        """
+        if len(content) <= max_length:
+            return content
+        return content[:max_length] + f"\n\n[Content truncated: {len(content)} chars -> {max_length} chars]"
+    
+    def _manage_message_history(self, messages: List[Dict[str, str]], max_messages: int = 20) -> List[Dict[str, str]]:
+        """
+        Manage message history to prevent token limit issues
+        
+        Args:
+            messages: List of message dictionaries
+            max_messages: Maximum number of messages to keep (excluding system prompt)
+            
+        Returns:
+            Truncated message list
+        """
+        if len(messages) <= max_messages:
+            return messages
+        
+        # Keep the first message (initial user query) and the last (max_messages - 1) messages
+        truncated = [messages[0]]  # Keep initial query
+        truncated.extend(messages[-(max_messages - 1):])  # Keep most recent messages
+        
+        print(f"⚠️  Message history truncated: {len(messages)} -> {len(truncated)} messages to prevent token limit")
+        return truncated
     
     async def run_trading_session(self, today_date: str) -> None:
         """
@@ -222,10 +483,16 @@ class BaseAgent:
         # Set up logging
         log_file = self._setup_logging(today_date)
         
-        # Update system prompt
+        # Create agent with all tools from all MCP servers
+        # All tools are automatically registered:
+        # - Math tools (add, multiply) from local Math MCP server
+        # - Trade tools (buy, sell) from local TradeTools MCP server  
+        # - Alpha Vantage tools (TIME_SERIES_DAILY, RSI, MACD, etc.) from Alpha Vantage MCP server
+        # Agent will automatically select and call appropriate tools based on context
+        print(f"🤖 Creating agent with {len(self.tools)} registered tools (auto-selection enabled)")
         self.agent = create_agent(
             self.model,
-            tools=self.tools,
+            tools=self.tools,  # All tools from all MCP servers are automatically included
             system_prompt=get_agent_system_prompt(today_date, self.signature),
         )
         
@@ -244,26 +511,103 @@ class BaseAgent:
             
             try:
                 # Call agent
+                print(f"📞 [DEBUG] Calling _ainvoke_with_retry for step {current_step}...")
                 response = await self._ainvoke_with_retry(message)
+                print(f"✅ [DEBUG] _ainvoke_with_retry returned, processing response...")
                 
                 # Extract agent response
+                print(f"🔍 [DEBUG] Extracting agent response...")
                 agent_response = extract_conversation(response, "final")
+                print(f"✅ [DEBUG] Agent response extracted: {len(agent_response) if agent_response else 0} chars")
+                if agent_response:
+                    print(f"   Response preview: {agent_response[:200]}...")
                 
-                # Extract tool messages (do this before checking stop signal to ensure we log tool calls)
+                # Extract tool messages and tool calls (do this before checking stop signal to ensure we log tool calls)
+                print(f"🔍 [DEBUG] Extracting tool messages...")
                 tool_msgs = extract_tool_messages(response)
+                print(f"✅ [DEBUG] Found {len(tool_msgs)} tool messages")
                 tool_response = '\n'.join([msg.content for msg in tool_msgs])
+                print(f"✅ [DEBUG] Tool response length: {len(tool_response)} chars")
+                
+                # Truncate tool response if too long to prevent token limit issues
+                print(f"✂️  [DEBUG] Truncating tool response if needed...")
+                tool_response = self._truncate_message_content(tool_response, max_length=5000)
+                print(f"✅ [DEBUG] Tool response after truncation: {len(tool_response)} chars")
+                
+                # Extract tool calls from assistant response for detailed logging
+                print(f"🔍 [DEBUG] Extracting tool calls info...")
+                tool_calls_info = self._extract_tool_calls_info(response)
+                print(f"✅ [DEBUG] Found {len(tool_calls_info) if tool_calls_info else 0} tool calls")
+                
+                # Check for API rate limit errors in tool responses
+                if tool_response:
+                    tool_response_lower = tool_response.lower()
+                    if "rate limit" in tool_response_lower or "429" in tool_response or "too many requests" in tool_response_lower or "api limit" in tool_response_lower:
+                        # Try to identify which API/tool is rate limited
+                        api_name = "Unknown API"
+                        tool_name = "Unknown Tool"
+                        
+                        # Check tool calls to identify which tool was called
+                        if tool_calls_info:
+                            # Get the last tool call (most likely the one that failed)
+                            last_tool_call = tool_calls_info[-1] if tool_calls_info else {}
+                            tool_name = last_tool_call.get("tool_name", "Unknown Tool")
+                            
+                            # Identify API based on tool name
+                            if "time_series" in tool_name.lower() or "global_quote" in tool_name.lower() or "rsi" in tool_name.lower() or "macd" in tool_name.lower():
+                                api_name = "Alpha Vantage MCP"
+                            elif "buy" in tool_name.lower() or "sell" in tool_name.lower():
+                                api_name = "Trade Tool (Local)"
+                        
+                        print(f"⚠️  API Rate Limit Detected in Tool Response:")
+                        print(f"   API Service: {api_name}")
+                        print(f"   Tool Name: {tool_name}")
+                        print(f"   Tool Response: {tool_response[:500]}...")  # First 500 chars
+                        
+                        # Log to file
+                        try:
+                            rate_limit_log = {
+                                "role": "system",
+                                "content": f"⚠️  API Rate Limit in Tool Response - Service: {api_name}, Tool: {tool_name}, Response: {tool_response}"
+                            }
+                            self._log_message(log_file, [rate_limit_log])
+                        except:
+                            pass
+                
+                # Truncate agent response if too long
+                print(f"✂️  [DEBUG] Truncating agent response if needed...")
+                agent_response = self._truncate_message_content(agent_response, max_length=3000)
+                print(f"✅ [DEBUG] Agent response after truncation: {len(agent_response)} chars")
                 
                 # Prepare new messages
+                print(f"📝 [DEBUG] Preparing new messages...")
                 new_messages = [
                     {"role": "assistant", "content": agent_response},
                     {"role": "user", "content": f'Tool results: {tool_response}'}
                 ]
+                print(f"✅ [DEBUG] New messages prepared: {len(new_messages)} messages")
                 
                 # Add new messages
+                print(f"📝 [DEBUG] Adding new messages to history...")
                 message.extend(new_messages)
+                print(f"✅ [DEBUG] Message history now has {len(message)} messages")
+                
+                # Manage message history to prevent token limit issues
+                print(f"✂️  [DEBUG] Managing message history...")
+                message = self._manage_message_history(message, max_messages=20)
+                print(f"✅ [DEBUG] Message history after management: {len(message)} messages")
                 
                 # Log messages (log each message separately for better readability)
                 self._log_message(log_file, [new_messages[0]])  # Log assistant response
+                
+                # Log detailed tool usage information
+                if tool_calls_info:
+                    tool_usage_log = {
+                        "role": "system",
+                        "content": f"🔧 Tools Used: {json.dumps(tool_calls_info, ensure_ascii=False, indent=2)}"
+                    }
+                    self._log_message(log_file, [tool_usage_log])
+                
                 if tool_response:  # Only log tool results if there are any
                     self._log_message(log_file, [new_messages[1]])  # Log tool results
                 
@@ -274,12 +618,58 @@ class BaseAgent:
                     break
                 
             except Exception as e:
-                print(f"❌ Trading session error: {str(e)}")
-                print(f"Error details: {e}")
+                error_msg = str(e)
+                error_details = str(e)
+                error_type = type(e).__name__
+                
+                print(f"❌ [DEBUG] Exception in trading loop (Step {current_step}):")
+                print(f"   Error Type: {error_type}")
+                print(f"   Error Message: {error_msg[:500]}")
+                import traceback
+                print(f"   Traceback:")
+                traceback.print_exc()
+                
+                # Enhanced error logging for API rate limits
+                if "rate limit" in error_msg.lower() or "429" in error_msg or "too many requests" in error_msg.lower():
+                    # Try to extract which API/service is rate limited
+                    api_name = "Unknown API"
+                    if "alphavantage" in error_msg.lower() or "alpha_vantage" in error_msg.lower():
+                        api_name = "Alpha Vantage MCP"
+                    elif "openai" in error_msg.lower():
+                        api_name = "OpenAI API"
+                    elif "deepseek" in error_msg.lower():
+                        api_name = "DeepSeek API"
+                    
+                    print(f"⚠️  API Rate Limit Error Detected:")
+                    print(f"   API Service: {api_name}")
+                    print(f"   Error Message: {error_msg}")
+                    print(f"   Full Error Details: {error_details}")
+                    
+                    # Log to file if possible
+                    try:
+                        error_log = {
+                            "role": "system",
+                            "content": f"⚠️  API Rate Limit Error - Service: {api_name}, Error: {error_msg}, Details: {error_details}"
+                        }
+                        self._log_message(log_file, [error_log])
+                    except:
+                        pass
+                else:
+                    print(f"❌ Trading session error: {error_msg}")
+                    print(f"Error details: {error_details}")
+                
                 raise
         
         # Handle trading results
-        await self._handle_trading_result(today_date)
+        print(f"📊 [DEBUG] Handling trading results for {today_date}...")
+        try:
+            await self._handle_trading_result(today_date)
+            print(f"✅ [DEBUG] Trading results handled successfully")
+        except Exception as e:
+            print(f"❌ [DEBUG] Error handling trading results: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     async def _handle_trading_result(self, today_date: str) -> None:
         """Handle trading results"""
@@ -329,6 +719,7 @@ class BaseAgent:
     def _create_initial_position(self, position_date: str) -> None:
         """
         Create initial position record for a specific date
+        Always creates a new initial position for each backtest, even if one exists.
         
         Args:
             position_date: Date for the initial position (usually the backtest start date)
@@ -344,6 +735,7 @@ class BaseAgent:
         init_position['CASH'] = self.initial_cash
         
         # Check if a position record already exists for this date
+        # If exists, we'll still create a new one (for fresh backtest start)
         position_exists = False
         if os.path.exists(self.position_file):
             with open(self.position_file, "r") as f:
@@ -352,20 +744,17 @@ class BaseAgent:
                         continue
                     try:
                         doc = json.loads(line)
-                        if doc.get("date") == position_date:
-                            positions = doc.get("positions", {})
-                            # Check if it has actual data
-                            if positions and (positions.get("CASH", 0) > 0 or any(v > 0 for k, v in positions.items() if k != "CASH")):
-                                position_exists = True
-                                break
+                        if doc.get("date") == position_date and doc.get("id") == 0:
+                            position_exists = True
+                            break
                     except:
                         continue
         
         if position_exists:
-            print(f"ℹ️  Initial position for {position_date} already exists, skipping creation")
-            return
+            print(f"ℹ️  Initial position for {position_date} already exists, but creating fresh one for this backtest")
         
-        # Append to existing file or create new file
+        # Always append to existing file or create new file
+        # This ensures each backtest starts with a fresh initial position
         with open(self.position_file, "a", encoding="utf-8") as f:
             f.write(json.dumps({
                 "date": position_date, 
@@ -424,10 +813,10 @@ class BaseAgent:
                     except:
                         continue
             
-            # If no initial position found for this backtest, create one
-            if not has_init_position:
-                print(f"📅 No initial position found for backtest start date {init_date}, creating new initial position...")
-                self._create_initial_position(init_date)
+            # Always create initial position for this backtest date range (even if file exists)
+            # This ensures each backtest starts with a fresh initial position
+            print(f"📅 Creating initial position for backtest start date {init_date}...")
+            self._create_initial_position(init_date)
             
             # Read existing position file, find latest date within the requested range
             with open(self.position_file, "r") as f:
@@ -500,20 +889,29 @@ class BaseAgent:
     
     async def run_with_retry(self, today_date: str) -> None:
         """Run method with retry"""
+        print(f"🔄 [DEBUG] Starting run_with_retry for {today_date}")
         for attempt in range(1, self.max_retries + 1):
             try:
-                print(f"🔄 Attempting to run {self.signature} - {today_date} (Attempt {attempt})")
+                print(f"🔄 [DEBUG] Attempting to run {self.signature} - {today_date} (Attempt {attempt}/{self.max_retries})")
                 await self.run_trading_session(today_date)
-                print(f"✅ {self.signature} - {today_date} run successful")
+                print(f"✅ [DEBUG] {self.signature} - {today_date} run successful")
                 return
             except Exception as e:
-                print(f"❌ Attempt {attempt} failed: {str(e)}")
+                error_type = type(e).__name__
+                error_msg = str(e)
+                print(f"❌ [DEBUG] Attempt {attempt} failed:")
+                print(f"   Error Type: {error_type}")
+                print(f"   Error Message: {error_msg[:500]}")
+                import traceback
+                print(f"   Traceback:")
+                traceback.print_exc()
+                
                 if attempt == self.max_retries:
-                    print(f"💥 {self.signature} - {today_date} all retries failed")
+                    print(f"💥 [DEBUG] {self.signature} - {today_date} all {self.max_retries} retries failed")
                     raise
                 else:
                     wait_time = self.base_delay * attempt
-                    print(f"⏳ Waiting {wait_time} seconds before retry...")
+                    print(f"⏳ [DEBUG] Waiting {wait_time} seconds before retry...")
                     await asyncio.sleep(wait_time)
     
     async def run_date_range(self, init_date: str, end_date: str) -> None:
@@ -536,18 +934,26 @@ class BaseAgent:
         print(f"📊 Trading days to process: {trading_dates}")
         
         # Process each trading day
-        for date in trading_dates:
-            print(f"🔄 Processing {self.signature} - Date: {date}")
+        for idx, date in enumerate(trading_dates, 1):
+            print(f"🔄 Processing {self.signature} - Date: {date} ({idx}/{len(trading_dates)})")
             
             # Set configuration
+            print(f"📝 [DEBUG] Setting configuration for date {date}...")
             write_config_value("TODAY_DATE", date)
             write_config_value("SIGNATURE", self.signature)
+            print(f"✅ [DEBUG] Configuration set")
             
             try:
+                print(f"🚀 [DEBUG] Starting run_with_retry for {date}...")
                 await self.run_with_retry(date)
+                print(f"✅ [DEBUG] run_with_retry completed for {date}")
             except Exception as e:
-                print(f"❌ Error processing {self.signature} - Date: {date}")
-                print(e)
+                print(f"❌ [DEBUG] Error processing {self.signature} - Date: {date}")
+                print(f"   Error Type: {type(e).__name__}")
+                print(f"   Error Message: {str(e)[:500]}")
+                import traceback
+                print(f"   Full traceback:")
+                traceback.print_exc()
                 raise
         
         print(f"✅ {self.signature} processing completed")

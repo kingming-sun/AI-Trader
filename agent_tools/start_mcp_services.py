@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 MCP Service Startup Script (Python Version)
-Start all four MCP services: Math, Search, TradeTools, LocalPrices
+Start local MCP services: Math, TradeTools
+Note: Search and LocalPrices are replaced by Alpha Vantage MCP server
 """
 
 import os
@@ -18,34 +19,25 @@ class MCPServiceManager:
         self.running = True
         
         # Set default ports
+        # Note: Search and LocalPrices are now replaced by Alpha Vantage MCP server
         self.ports = {
             'math': int(os.getenv('MATH_HTTP_PORT', '8000')),
-            'search': int(os.getenv('SEARCH_HTTP_PORT', '8001')),
-            'trade': int(os.getenv('TRADE_HTTP_PORT', '8002')),
-            'price': int(os.getenv('GETPRICE_HTTP_PORT', '8003'))
+            'trade': int(os.getenv('TRADE_HTTP_PORT', '8002'))
         }
         
         # Service configurations
+        # Only Math and TradeTools are kept as local services
+        # Search and LocalPrices are replaced by Alpha Vantage MCP server
         self.service_configs = {
             'math': {
                 'script': 'tool_math.py',
                 'name': 'Math',
                 'port': self.ports['math']
             },
-            'search': {
-                'script': 'tool_jina_search.py',
-                'name': 'Search',
-                'port': self.ports['search']
-            },
             'trade': {
                 'script': 'tool_trade.py',
                 'name': 'TradeTools',
                 'port': self.ports['trade']
-            },
-            'price': {
-                'script': 'tool_get_price_local.py',
-                'name': 'LocalPrices',
-                'port': self.ports['price']
             }
         }
         

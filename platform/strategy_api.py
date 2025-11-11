@@ -351,7 +351,53 @@ def get_services_status():
     """Get status of all platform services"""
     try:
         status = service_manager.get_all_services_status()
+        
+        # Get tools from all MCP services
+        try:
+            import asyncio
+            tools = asyncio.run(service_manager.get_mcp_tools())
+            status['mcp_tools'] = tools
+            print(f"✅ MCP tools retrieved: {list(tools.keys())}")
+        except Exception as e:
+            # If getting tools fails, continue without tools info
+            status['mcp_tools'] = {}
+            print(f"⚠️ Warning: Failed to get MCP tools: {e}")
+            import traceback
+            traceback.print_exc()
+        
         return jsonify({"success": True, "status": status})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/services/tools', methods=['GET'])
+def get_mcp_tools():
+    """Get tools from all MCP services"""
+    try:
+        import asyncio
+        tools = asyncio.run(service_manager.get_mcp_tools())
+        return jsonify({"success": True, "tools": tools})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/services/<service_name>/tools', methods=['GET'])
+def get_service_tools(service_name):
+    """Get detailed tools information for a specific service"""
+    try:
+        import asyncio
+        all_tools = asyncio.run(service_manager.get_mcp_tools())
+        
+        if service_name in all_tools:
+            service_info = all_tools[service_name]
+            return jsonify({
+                "success": True,
+                "service": service_name,
+                "tools": service_info.get('tools_detail', []),
+                "count": service_info.get('count', 0),
+                "type": service_info.get('type', 'unknown'),
+                "note": service_info.get('note', '')  # Include note if connection failed
+            })
+        else:
+            return jsonify({"success": False, "error": f"Service {service_name} not found"}), 404
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
