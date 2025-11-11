@@ -361,10 +361,24 @@ class BaseAgent:
                 print(f"📤 [DEBUG] Calling agent.ainvoke (Attempt {attempt}/{self.max_retries})...")
                 print(f"   Input message structure: {[msg.get('role', 'unknown') for msg in message]}")
                 
-                result = await self.agent.ainvoke(
-                    {"messages": message}, 
-                    {"recursion_limit": 200}  # Increased from 100 to allow more tool calls
-                )
+                # Add timeout to prevent infinite hanging (5 minutes)
+                try:
+                    result = await asyncio.wait_for(
+                        self.agent.ainvoke(
+                            {"messages": message}, 
+                            {"recursion_limit": 200}  # Increased from 100 to allow more tool calls
+                        ),
+                        timeout=300  # 5 minutes timeout
+                    )
+                except asyncio.TimeoutError:
+                    print(f"⏱️  [DEBUG] Agent.ainvoke timed out after 300 seconds")
+                    if attempt < self.max_retries:
+                        wait_time = self.base_delay * (2 ** (attempt - 1))
+                        print(f"   Retrying in {wait_time} seconds...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        raise TimeoutError("Agent call timed out after 300 seconds")
                 
                 print(f"✅ [DEBUG] Agent.ainvoke completed successfully")
                 print(f"   Response type: {type(result)}")
