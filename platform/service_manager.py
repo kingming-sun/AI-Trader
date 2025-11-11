@@ -227,6 +227,18 @@ class ServiceManager:
                     'description': 'Multiply two numbers (supports int and float)',
                     'parameters': {'a': 'float', 'b': 'float'},
                     'returns': 'float'
+                },
+                {
+                    'name': 'subtract',
+                    'description': 'Subtract b from a (supports int and float)',
+                    'parameters': {'a': 'float', 'b': 'float'},
+                    'returns': 'float'
+                },
+                {
+                    'name': 'divide',
+                    'description': 'Divide a by b (supports int and float). Returns infinity if b is zero.',
+                    'parameters': {'a': 'float', 'b': 'float'},
+                    'returns': 'float'
                 }
             ]
         elif service_name == 'trade':

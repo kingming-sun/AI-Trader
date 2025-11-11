@@ -82,11 +82,14 @@ def _get_price_from_local(symbol: str, date_str: str) -> Optional[Dict[str, floa
                     series = doc.get("Time Series (Daily)", {})
                     day_data = series.get(date_str)
                     if day_data:
+                        # Support both formats: "1. open"/"4. close" and "1. buy price"/"4. sell price"
+                        open_price = day_data.get("1. open") or day_data.get("1. buy price", 0)
+                        close_price = day_data.get("4. close") or day_data.get("4. sell price", 0)
                         return {
-                            "open": float(day_data.get("1. open", 0)),
+                            "open": float(open_price),
                             "high": float(day_data.get("2. high", 0)),
                             "low": float(day_data.get("3. low", 0)),
-                            "close": float(day_data.get("4. close", 0)),
+                            "close": float(close_price),
                             "volume": int(day_data.get("5. volume", 0))
                         }
                 except (json.JSONDecodeError, KeyError, ValueError):

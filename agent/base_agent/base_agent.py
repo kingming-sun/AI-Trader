@@ -197,7 +197,7 @@ class BaseAgent:
                         'INFLATION', 'ALPHA_VANTAGE', 'ALPHAVANTAGE', 'STOCK', 'QUOTE', 
                         'CURRENCY', 'CRYPTO', 'ECONOMIC', 'INDICATOR']):
                     tool_info.setdefault('alphavantage', []).append(str(tool_name))
-                elif tool_name in ['add', 'multiply'] or 'math' in tool_name_upper:
+                elif tool_name in ['add', 'multiply', 'subtract', 'divide'] or 'math' in tool_name_upper:
                     tool_info.setdefault('math', []).append(str(tool_name))
                 elif tool_name in ['buy', 'sell'] or 'trade' in tool_name_upper:
                     tool_info.setdefault('trade', []).append(str(tool_name))
@@ -221,19 +221,16 @@ class BaseAgent:
                 print("⚠️  Warning: Alpha Vantage MCP configured but no tools detected")
                 print("   This may indicate a connection issue. Check ALPHAADVANTAGE_API_KEY environment variable.")
             
-            # Filter tools to reduce token usage - only keep essential tools
-            # This is critical to avoid exceeding model's context window (131k tokens)
+            # Filter tools to reduce token usage - only keep CRITICAL tools
+            # Alpha Vantage tool schemas are extremely large (~20k tokens each)
+            # We must be very aggressive in filtering to stay under 131k token limit
             essential_tool_names = {
-                # Trading tools (required)
+                # Trading tools (absolutely required)
                 'buy', 'sell',
-                # Core price data tools (required for analysis)
-                'TIME_SERIES_DAILY', 'GLOBAL_QUOTE', 'TIME_SERIES_DAILY_ADJUSTED',
-                # Technical indicators (useful but optional)
-                'RSI', 'MACD', 'SMA', 'EMA', 'BBANDS',
-                # Market data
-                'SYMBOL_SEARCH', 'MARKET_STATUS', 'NEWS_SENTIMENT',
-                # Math tools
-                'add', 'multiply'
+                # ONLY ONE price data tool (most essential)
+                'TIME_SERIES_DAILY',
+                # Math tools (essential for portfolio calculations)
+                'add', 'multiply', 'subtract', 'divide'
             }
             
             original_tool_count = len(self.tools)
@@ -366,7 +363,7 @@ class BaseAgent:
                 
                 result = await self.agent.ainvoke(
                     {"messages": message}, 
-                    {"recursion_limit": 100}
+                    {"recursion_limit": 200}  # Increased from 100 to allow more tool calls
                 )
                 
                 print(f"✅ [DEBUG] Agent.ainvoke completed successfully")

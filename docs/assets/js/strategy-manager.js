@@ -450,7 +450,7 @@ async function loadStrategies() {
             
             // 计算当前资产
             const currentAsset = metrics.current_value || portfolio.total_value || 0;
-            const initialAsset = metrics.initial_value || 10000;
+            const initialAsset = metrics.initial_value || (portfolio.total_value ? portfolio.total_value : 10000);
             
             // 总收益率
             const totalReturn = metrics.total_return !== undefined 
@@ -460,8 +460,8 @@ async function loadStrategies() {
             // 最大回撤
             const maxDrawdown = metrics.max_drawdown || 0;
             
-            // 交易天数
-            const tradingDays = assetEvolution.length || 0;
+            // 计算总盈亏（PNL）
+            const totalPnl = currentAsset - initialAsset;
             
             // 持仓信息
             const holdings = portfolio.holdings || [];
@@ -477,6 +477,17 @@ async function loadStrategies() {
             // 资产变化数据（用于折线图）
             const chartData = assetEvolution.length > 0 ? assetEvolution : [];
             const chartColor = totalReturn >= 0 ? '#48bb78' : '#f56565';
+            
+            // 计算24小时变化（如果有最近的数据）
+            let change24h = 0;
+            if (assetEvolution.length >= 2) {
+                const recent = assetEvolution.slice(-24); // 取最近24个数据点
+                if (recent.length >= 2) {
+                    const oldValue = recent[0].total_value || 0;
+                    const newValue = recent[recent.length - 1].total_value || 0;
+                    change24h = newValue - oldValue;
+                }
+            }
             
             // 生成唯一的canvas ID
             const canvasId = `chart-${strategy.strategy_id}-${index}`;
@@ -518,7 +529,7 @@ async function loadStrategies() {
                     </div>
                     ` : ''}
                     
-                    <div class="metric-row">
+                    <div class="metric-row" style="grid-template-columns: 1fr 1fr 1fr;">
                         <div class="metric-item">
                             <div class="metric-label">初始资金</div>
                             <div class="metric-value">${strategyManager.formatCurrency(initialAsset)}</div>
@@ -527,26 +538,9 @@ async function loadStrategies() {
                             <div class="metric-label">当前资产</div>
                             <div class="metric-value">${strategyManager.formatCurrency(currentAsset)}</div>
                         </div>
-                    </div>
-                    
-                    <div class="metric-row">
                         <div class="metric-item">
                             <div class="metric-label">总收益率</div>
                             <div class="metric-value ${totalReturn >= 0 ? 'positive' : 'negative'}">${strategyManager.formatPercent(totalReturn)}</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">最大回撤</div>
-                            <div class="metric-value negative">${strategyManager.formatPercent(Math.abs(maxDrawdown))}</div>
-                        </div>
-                    </div>
-                    
-                    <div class="metric-row">
-                        <div class="metric-item">
-                            <div class="metric-label">交易天数</div>
-                            <div class="metric-value">${tradingDays} 天</div>
-                        </div>
-                        <div class="metric-item">
-                            <!-- 占位 -->
                         </div>
                     </div>
                 </div>
