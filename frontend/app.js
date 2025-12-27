@@ -1101,16 +1101,21 @@ const AssetTab = ({ strategyId, mode, results, isRunning, onRun, onStop, config,
         if (!results || !results.asset_evolution || results.asset_evolution.length === 0) return null;
         
         const assets = results.asset_evolution;
-        const initial = assets[0].total_asset;
-        const current = assets[assets.length - 1].total_asset;
-        const returns = ((current - initial) / initial) * 100;
+        
+        // Safety check for first element
+        if (!assets[0] || typeof assets[0].total_asset === 'undefined') return null;
+
+        const initial = assets[0].total_asset || 0;
+        const current = assets[assets.length - 1]?.total_asset || 0;
+        const returns = initial !== 0 ? ((current - initial) / initial) * 100 : 0;
         
         // Calculate max drawdown
         let maxDrawdown = 0;
         let peak = -Infinity;
         for (let item of assets) {
-            if (item.total_asset > peak) peak = item.total_asset;
-            const drawdown = (peak - item.total_asset) / peak;
+            const val = item.total_asset || 0;
+            if (val > peak) peak = val;
+            const drawdown = peak > 0 ? (peak - val) / peak : 0;
             if (drawdown > maxDrawdown) maxDrawdown = drawdown;
         }
 
@@ -1197,21 +1202,21 @@ const AssetTab = ({ strategyId, mode, results, isRunning, onRun, onStop, config,
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                         <div className="text-xs text-gray-500 uppercase tracking-wide">Initial Cash</div>
-                        <div className="text-lg font-bold text-gray-900">${metrics.initial.toLocaleString()}</div>
+                        <div className="text-lg font-bold text-gray-900">${(metrics.initial || 0).toLocaleString()}</div>
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                         <div className="text-xs text-gray-500 uppercase tracking-wide">Current Asset</div>
-                        <div className="text-lg font-bold text-gray-900">${metrics.current.toLocaleString()}</div>
+                        <div className="text-lg font-bold text-gray-900">${(metrics.current || 0).toLocaleString()}</div>
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                         <div className="text-xs text-gray-500 uppercase tracking-wide">Total Return</div>
                         <div className={`text-lg font-bold ${metrics.returns >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {metrics.returns >= 0 ? '+' : ''}{metrics.returns.toFixed(2)}%
+                            {metrics.returns >= 0 ? '+' : ''}{(metrics.returns || 0).toFixed(2)}%
                         </div>
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                         <div className="text-xs text-gray-500 uppercase tracking-wide">Max Drawdown</div>
-                        <div className="text-lg font-bold text-red-600">-{metrics.maxDrawdown.toFixed(2)}%</div>
+                        <div className="text-lg font-bold text-red-600">-{(metrics.maxDrawdown || 0).toFixed(2)}%</div>
                     </div>
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                         <div className="text-xs text-gray-500 uppercase tracking-wide">Trading Days</div>
@@ -1377,7 +1382,7 @@ const AgentCard = ({ strategy, onSelect, onDelete }) => {
                 </div>
                 <div>
                     <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{strategy.strategy_name}</h3>
-                    <p className="text-xs text-gray-400 font-mono mt-0.5">{strategy.strategy_id.substring(0, 18)}...</p>
+                    <p className="text-xs text-gray-400 font-mono mt-0.5">{(strategy.strategy_id || '').substring(0, 18)}...</p>
                 </div>
             </div>
             
@@ -1544,7 +1549,7 @@ const StrategyDetail = ({ strategy, onBack }) => {
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">{strategy.strategy_name}</h1>
                         <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                            <span className="font-mono">{strategy.strategy_id}</span>
+                            <span className="font-mono">{strategy.strategy_id || 'N/A'}</span>
                             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                             <span className={`flex items-center ${isRunning ? 'text-green-600' : 'text-gray-400'}`}>
                                 <div className={`w-2 h-2 rounded-full mr-2 ${isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>

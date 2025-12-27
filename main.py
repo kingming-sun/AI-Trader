@@ -298,13 +298,21 @@ async def main(config_path=None):
         pass
     
 if __name__ == "__main__":
+    import argparse
     import sys
     
-    # Support specifying configuration file through command line arguments
-    # Usage: python livebaseagent_config.py [config_path]
-    # Example: python livebaseagent_config.py configs/my_config.json
-    config_path = sys.argv[1] if len(sys.argv) > 1 else None
+    parser = argparse.ArgumentParser(description='AI Trader Agent')
+    parser.add_argument('--config', type=str, help='Path to configuration file')
+    parser.add_argument('--strategy', type=str, help='Strategy ID (optional)')
+    parser.add_argument('--mode', type=str, default='backtest', help='Trading mode')
     
+    # Handle both old style (positional arg) and new style (flags)
+    if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
+        config_path = sys.argv[1]
+    else:
+        args = parser.parse_args()
+        config_path = args.config
+
     if config_path:
         print(f"📄 Using specified configuration file: {config_path}")
     else:
