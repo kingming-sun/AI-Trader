@@ -1,6 +1,6 @@
 {
     "SIGNATURE": "deepseek-chat-v3.1",
-    "TODAY_DATE": "2025-01-02",
+    "TODAY_DATE": "2025-01-10",
     "IF_TRADE": false,
-    "DATA_PATH": "/Users/bytedance/Documents/trae_projects/trad/AI-Trader/data/strategies/strategy_20251111_215243/backtest/agent_data"
+    "DATA_PATH": "/Users/bytedance/Documents/trae_projects/trad/AI-Trader/data/strategies/strategy_20251228_004212/backtest/agent_data"
 }

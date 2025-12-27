@@ -1,13 +1,13 @@
 {
-  "strategy_id": "strategy_20251111_215243",
-  "strategy_name": "jklj",
-  "description": "j",
-  "created_at": "2025-11-11T21:52:43.126454",
+  "strategy_id": "strategy_20251228_004212",
+  "strategy_name": "test",
+  "description": "",
+  "created_at": "2025-12-28T00:42:12.914412",
   "status": "design",
   "agent_type": "BaseAgent",
   "date_range": {
-    "end_date": "2025-01-31",
-    "init_date": "2025-01-01"
+    "init_date": "2025-01-01",
+    "end_date": "2025-01-31"
   },
   "models": [
     {
@@ -24,7 +24,6 @@
     "max_steps": 30
   },
   "log_config": {
-    "log_path": "./data/strategies/strategy_20251111_215243"
-  },
-  "updated_at": "2025-11-11T21:52:52.050751"
+    "log_path": "./data/strategies/strategy_20251228_004212"
+  }
 }

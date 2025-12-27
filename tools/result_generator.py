@@ -16,24 +16,29 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from tools.price_tools import get_open_prices, get_yesterday_open_and_close_price, _fetch_price_from_alpha_vantage
+from tools.price_tools import get_open_prices, get_yesterday_open_and_close_price, _fetch_price_from_alpha_vantage, _get_price_from_local
 import time
 
 def get_close_prices(date: str, symbols: List[str]) -> Dict[str, Optional[float]]:
-    """Get closing prices for symbols on a specific date from Alpha Vantage API"""
+    """Get closing prices for symbols on a specific date, prioritizing local data"""
     results: Dict[str, Optional[float]] = {}
     
-    # Fetch prices from Alpha Vantage API for each symbol
     for symbol in symbols:
+        # 1. Try local data first
+        price_data = _get_price_from_local(symbol, date)
+        if price_data and price_data.get("close"):
+            results[f'{symbol}_price'] = price_data["close"]
+            continue
+            
+        # 2. Fallback to API
         price_data = _fetch_price_from_alpha_vantage(symbol, date)
         if price_data and price_data.get("close"):
             results[f'{symbol}_price'] = price_data["close"]
         else:
             results[f'{symbol}_price'] = None
         
-        # Add delay to avoid rate limiting (150 calls per minute for premium tier)
-        # 60000ms / 150 = 400ms, using 450ms for safety margin
-        time.sleep(0.45)  # 450ms delay between requests
+        # Add delay to avoid rate limiting (only after API calls)
+        time.sleep(0.45)
     
     return results
 
@@ -429,7 +434,7 @@ def generate_result_files(log_path: str, initial_cash: float = 10000):
 
 if __name__ == "__main__":
     # Test with existing data
-    test_path = "./data/strategies/strategy_20251104_141923/deepseek-chat-v3.1"
+    test_path = "./data/strategies/strategy_20251111_215243/backtest/agent_data"
     if Path(test_path).exists():
         print(f"Testing with: {test_path}")
         generate_result_files(test_path)
