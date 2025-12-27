@@ -92,6 +92,19 @@ class RunManager:
                 print(f"   ✅ Deleted: log/ directory")
             except Exception as e:
                 print(f"   ⚠️  Failed to delete log directory: {e}")
+                
+        # Also clean up strategy level log file to ensure we don't see old logs
+        # The strategy log dir is parallel to agent_data dir
+        strategy_log_dir = data_path.parent / "log"
+        if strategy_log_dir.exists():
+            # Clean up all log files in the strategy log directory for this mode
+            # We need to know strategy_id and mode, but they are not passed here.
+            # However, we can infer them or just clean up everything in this specific log dir 
+            # if we are sure it's isolated. 
+            # Actually, run_strategy already handles the main log file cleanup.
+            # But let's make sure progress files are also reset here if possible, 
+            # though run_strategy does that too.
+            pass
         
         print(f"✅ Cleanup completed")
     
@@ -265,6 +278,10 @@ class RunManager:
         progress_file = strategy_log_dir / f"{strategy_id}_{mode}_progress.json"
         if progress_file.exists():
             progress_file.unlink()
+            
+        # Also ensure we clean up the process info file before starting
+        if process_info_file.exists():
+            process_info_file.unlink()
         
         return {
             "strategy_id": strategy_id,
@@ -533,19 +550,31 @@ class RunManager:
             if has_results:
                 # 回测已完成，保持策略状态为"backtest"（前端会根据回测状态显示"回测结束"）
                 if mode == "backtest":
-                    print(f"✅ 回测已完成，策略 {strategy_id} 回测结束")
-                
-                return {
-                    "is_running": False,
-                    "status": "completed",
-                    "message": "策略运行已完成",
-                    "has_results": True,
-                    "progress": 100,
-                    "current_date": progress_info.get("current_date"),
-                    "total_dates": progress_info.get("total_dates", 0),
-                    "processed_dates": progress_info.get("processed_dates", 0)
-                }
-            elif progress_info.get("progress", 0) > 0:
+                    # Check if the process is actually still running
+                    is_process_running = False
+                    if process_id and psutil:
+                        try:
+                            proc = psutil.Process(process_id)
+                            if proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE:
+                                is_process_running = True
+                        except:
+                            pass
+                    
+                    if not is_process_running:
+                        print(f"✅ 回测已完成，策略 {strategy_id} 回测结束")
+                        return {
+                            "is_running": False,
+                            "status": "completed",
+                            "message": "策略运行已完成",
+                            "has_results": True,
+                            "progress": 100,
+                            "current_date": progress_info.get("current_date"),
+                            "total_dates": progress_info.get("total_dates", 0),
+                            "processed_dates": progress_info.get("processed_dates", 0)
+                        }
+                    # If process is still running, fall through to show progress
+            
+            if progress_info.get("progress", 0) > 0:
                 # Has partial progress but stopped
                 return {
                     "is_running": False,

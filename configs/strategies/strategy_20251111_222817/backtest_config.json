@@ -6,8 +6,8 @@
   "status": "design",
   "agent_type": "BaseAgent",
   "date_range": {
-    "init_date": "2025-01-01",
-    "end_date": "2025-01-10"
+    "end_date": "2025-01-10",
+    "init_date": "2025-01-01"
   },
   "models": [
     {
@@ -25,5 +25,6 @@
   },
   "log_config": {
     "log_path": "./data/strategies/strategy_20251111_222817"
-  }
+  },
+  "updated_at": "2025-12-27T23:04:14.551047"
 }

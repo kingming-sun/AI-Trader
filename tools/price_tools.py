@@ -16,7 +16,7 @@ if str(project_root) not in sys.path:
 from tools.general_tools import get_config_value
 
 # Alpha Vantage API Configuration
-ALPHA_VANTAGE_KEY = os.getenv("ALPHAADVANTAGE_API_KEY", "")
+ALPHA_VANTAGE_KEY = os.getenv("ALPHAVANTAGE_API_KEY") or os.getenv("ALPHA_VANTAGE_API_KEY") or os.getenv("ALPHAADVANTAGE_API_KEY", "")
 
 all_nasdaq_100_symbols = [
     "NVDA", "MSFT", "AAPL", "GOOG", "GOOGL", "AMZN", "META", "AVGO", "TSLA",
@@ -54,7 +54,8 @@ def get_yesterday_date(today_date: str) -> str:
 
 def _get_price_from_local(symbol: str, date_str: str) -> Optional[Dict[str, float]]:
     """
-    从本地 merged.jsonl 文件获取价格数据
+    从本地数据文件获取价格数据
+    优先查找 daily_prices_{symbol}.json，然后查找 merged.jsonl
     
     Args:
         symbol: 股票代码
@@ -63,7 +64,26 @@ def _get_price_from_local(symbol: str, date_str: str) -> Optional[Dict[str, floa
     Returns:
         价格数据字典，如果未找到则返回 None
     """
-    # 查找 merged.jsonl 文件
+    # 1. 尝试从 daily_prices_{symbol}.json 读取
+    daily_file = project_root / "data" / f"daily_prices_{symbol}.json"
+    if daily_file.exists():
+        try:
+            with open(daily_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                series = data.get("Time Series (Daily)", {})
+                day_data = series.get(date_str)
+                if day_data:
+                    return {
+                        "open": float(day_data.get("1. open", 0)),
+                        "high": float(day_data.get("2. high", 0)),
+                        "low": float(day_data.get("3. low", 0)),
+                        "close": float(day_data.get("4. close", 0)),
+                        "volume": int(day_data.get("5. volume", 0))
+                    }
+        except Exception as e:
+            print(f"⚠️  Error reading daily_prices_{symbol}.json: {e}")
+
+    # 2. 尝试从 merged.jsonl 文件读取
     data_file = project_root / "data" / "merged.jsonl"
     if not data_file.exists():
         return None
@@ -95,7 +115,7 @@ def _get_price_from_local(symbol: str, date_str: str) -> Optional[Dict[str, floa
                 except (json.JSONDecodeError, KeyError, ValueError):
                     continue
     except Exception as e:
-        print(f"⚠️  Error reading local data for {symbol}: {e}")
+        print(f"⚠️  Error reading merged.jsonl for {symbol}: {e}")
     
     return None
 

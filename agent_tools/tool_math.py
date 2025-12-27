@@ -1,9 +1,18 @@
-from fastmcp import FastMCP
-import os
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from fastmcp import FastMCP
+    mcp = FastMCP("Math")
+except ImportError:
+    # Fallback if fastmcp is not available
+    class MockMCP:
+        def tool(self):
+            def decorator(func):
+                return func
+            return decorator
+        def run(self, **kwargs):
+            print("FastMCP not installed, cannot run as MCP server")
+    mcp = MockMCP()
 
-mcp = FastMCP("Math")
+import os
 
 @mcp.tool()
 def add(a: float, b: float) -> float:

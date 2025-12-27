@@ -22,7 +22,7 @@ all_nasdaq_100_symbols = [
 def get_daily_price(SYMBOL: str):
     FUNCTION = "TIME_SERIES_DAILY"
     OUTPUTSIZE = 'compact'
-    APIKEY = os.getenv("ALPHAADVANTAGE_API_KEY")
+    APIKEY = os.getenv("ALPHAVANTAGE_API_KEY") or os.getenv("ALPHA_VANTAGE_API_KEY") or os.getenv("ALPHAADVANTAGE_API_KEY")
     url = f'https://www.alphavantage.co/query?function={FUNCTION}&symbol={SYMBOL}&outputsize={OUTPUTSIZE}&apikey={APIKEY}'
     r = requests.get(url)
     data = r.json()

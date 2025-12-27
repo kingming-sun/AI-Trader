@@ -1,4 +1,17 @@
-from fastmcp import FastMCP
+try:
+    from fastmcp import FastMCP
+    mcp = FastMCP("TradeTools")
+except ImportError:
+    # Fallback if fastmcp is not available
+    class MockMCP:
+        def tool(self):
+            def decorator(func):
+                return func
+            return decorator
+        def run(self, **kwargs):
+            print("FastMCP not installed, cannot run as MCP server")
+    mcp = MockMCP()
+
 import sys
 import os
 from typing import Dict, List, Optional, Any
@@ -11,7 +24,7 @@ from tools.general_tools import get_config_value,write_config_value
 
 # All trading is now simulation mode using Alpha Vantage API for price data
 
-mcp = FastMCP("TradeTools")
+# mcp = FastMCP("TradeTools") -> Moved to top try/except block
 
 
 

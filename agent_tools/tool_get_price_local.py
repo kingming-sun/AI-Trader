@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Alpha Vantage API key for price data
-ALPHA_VANTAGE_KEY = os.getenv("ALPHAADVANTAGE_API_KEY", "")
+ALPHA_VANTAGE_KEY = os.getenv("ALPHAVANTAGE_API_KEY") or os.getenv("ALPHA_VANTAGE_API_KEY") or os.getenv("ALPHAADVANTAGE_API_KEY", "")
 
 mcp = FastMCP("LocalPrices")
 

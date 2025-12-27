@@ -17,7 +17,7 @@ import time
 load_dotenv()
 
 # API Configuration
-ALPHA_VANTAGE_KEY = os.getenv("ALPHAADVANTAGE_API_KEY", "")
+ALPHA_VANTAGE_KEY = os.getenv("ALPHAVANTAGE_API_KEY") or os.getenv("ALPHA_VANTAGE_API_KEY") or os.getenv("ALPHAADVANTAGE_API_KEY", "")
 
 mcp = FastMCP("EnhancedPrices")
 

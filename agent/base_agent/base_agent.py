@@ -10,7 +10,11 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
+try:
+    from langchain_mcp_adapters.client import MultiServerMCPClient
+except ImportError:
+    print("⚠️ langchain_mcp_adapters not found, using local compatibility layer")
+    from agent.base_agent.mcp_compat import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 from dotenv import load_dotenv
@@ -126,8 +130,13 @@ class BaseAgent:
         
     def _get_default_mcp_config(self) -> Dict[str, Dict[str, Any]]:
         """Get default MCP configuration"""
-        # Get Alpha Vantage API key from environment
-        alpha_vantage_key = os.getenv("ALPHAADVANTAGE_API_KEY", "")
+        # Get Alpha Vantage API key from environment (try multiple spellings)
+        alpha_vantage_key = (
+            os.getenv("ALPHAVANTAGE_API_KEY") or 
+            os.getenv("ALPHA_VANTAGE_API_KEY") or 
+            os.getenv("ALPHAADVANTAGE_API_KEY") or 
+            ""
+        )
         
         config = {
             "math": {

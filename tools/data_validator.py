@@ -12,23 +12,54 @@ from typing import List, Tuple, Set, Optional
 import subprocess
 
 
-def get_available_dates(data_file: Path) -> Set[str]:
-    """Get all available dates from the local data file"""
+def get_available_dates(data_path: Path) -> Set[str]:
+    """Get all available dates from the local data files (jsonl or json)"""
     dates = set()
     
-    if not data_file.exists():
-        print(f"❌ Data file not found: {data_file}")
+    if not data_path.exists():
+        print(f"❌ Data path not found: {data_path}")
         return dates
     
-    with open(data_file, 'r') as f:
-        for line in f:
-            try:
-                data = json.loads(line)
-                if 'Time Series (Daily)' in data:
-                    for date in data['Time Series (Daily)'].keys():
-                        dates.add(date)
-            except json.JSONDecodeError:
-                continue
+    files_to_check = []
+    
+    # If it's a directory, look for all data files
+    if data_path.is_dir():
+        # Check merged.jsonl
+        merged = data_path / "merged.jsonl"
+        if merged.exists():
+            files_to_check.append(merged)
+        
+        # Check daily_prices_*.json
+        for f in data_path.glob("daily_prices_*.json"):
+            files_to_check.append(f)
+    else:
+        # It's a single file
+        files_to_check.append(data_path)
+    
+    for file_path in files_to_check:
+        try:
+            if file_path.suffix == '.jsonl':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        try:
+                            data = json.loads(line)
+                            if 'Time Series (Daily)' in data:
+                                for date in data['Time Series (Daily)'].keys():
+                                    dates.add(date)
+                        except json.JSONDecodeError:
+                            continue
+            elif file_path.suffix == '.json':
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    try:
+                        data = json.load(f)
+                        if 'Time Series (Daily)' in data:
+                            for date in data['Time Series (Daily)'].keys():
+                                dates.add(date)
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            print(f"Error reading file {file_path}: {e}")
+            continue
     
     return dates
 

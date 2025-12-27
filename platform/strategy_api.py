@@ -8,13 +8,29 @@ import os
 import sys
 import json
 from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load env vars from AI-Trader root or project root
+env_path = Path(__file__).parent.parent / ".env"
+if not env_path.exists():
+    env_path = Path(__file__).parent.parent.parent / ".env"
+if not env_path.exists():
+    env_path = Path(__file__).parent.parent.parent / "stock_hackthon" / "backend" / ".env"
+
+load_dotenv(env_path)
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from pathlib import Path
 
 # Add platform directory to path
 platform_dir = Path(__file__).parent
 sys.path.insert(0, str(platform_dir))
+
+# Add stock_hackthon directory to path for backend imports
+stock_hackthon_dir = Path(__file__).parent.parent.parent / "stock_hackthon"
+if stock_hackthon_dir.exists():
+    sys.path.insert(0, str(stock_hackthon_dir))
 
 from strategy_manager import StrategyManager, TradingMode
 from run_manager import RunManager
@@ -617,15 +633,16 @@ def get_available_data_range():
         
         from tools.data_validator import get_data_date_range
         
-        data_file = project_root / "data" / "merged.jsonl"
-        if not data_file.exists():
-            return jsonify({
+        # Check the data directory instead of a specific file
+        data_dir = project_root / "data"
+        if not data_dir.exists():
+             return jsonify({
                 "success": True,
                 "available": False,
-                "message": "本地没有可用的价格数据文件"
+                "message": "数据目录不存在"
             })
-        
-        min_date, max_date = get_data_date_range(data_file)
+            
+        min_date, max_date = get_data_date_range(data_dir)
         
         if min_date and max_date:
             return jsonify({
@@ -633,8 +650,8 @@ def get_available_data_range():
                 "available": True,
                 "start_date": min_date,
                 "end_date": max_date,
-                "message": f"数据范围: {min_date} 到 {max_date}",
-                "api_fallback": True,  # 标识支持 API 自动获取缺失数据
+                "message": f"本地数据范围: {min_date} 到 {max_date}",
+                "api_fallback": True,
                 "api_message": "可以选择超出本地范围的日期，缺失数据将自动从 Alpha Vantage API 获取"
             })
         else:
@@ -642,7 +659,7 @@ def get_available_data_range():
                 "success": True,
                 "available": False,
                 "message": "本地没有可用的价格数据",
-                "api_fallback": True,  # 标识支持 API 自动获取缺失数据
+                "api_fallback": True,
                 "api_message": "将完全依赖 Alpha Vantage API 获取数据"
             })
     except Exception as e:
@@ -720,8 +737,333 @@ def restart_service():
             "error": str(e)
         }), 500
 
+# Moved to end of file
+
+# ==================== 股票分析接口 (移植自 Stock Hackthon) ====================
+
+import importlib
+import logging
+
+# Global variables
+stock_analysis_agent = None
+av_client = None
+ACTIVE_AGENT = "none"
+
+def initialize_analysis_agent():
+    global stock_analysis_agent, av_client, ACTIVE_AGENT
+    logger = logging.getLogger(__name__)
+    
+    # 优先使用 ReAct Agent，失败则回退到 LangGraph Agent
+    try:
+        import backend.react_agent_service
+        importlib.reload(backend.react_agent_service)
+        from backend.react_agent_service import stock_analysis_agent as _react_agent, av_client as _av_client
+        
+        stock_analysis_agent = _react_agent
+        av_client = _av_client
+        ACTIVE_AGENT = "react"
+        logger.info("React Agent initialized successfully")
+    except Exception as e:
+        # 回退到 LangGraph
+        try:
+            import backend.langgraph_service
+            importlib.reload(backend.langgraph_service)
+            from backend.langgraph_service import stock_analysis_agent as _lg_agent
+            
+            stock_analysis_agent = _lg_agent
+            ACTIVE_AGENT = "langgraph"
+            
+            # Fallback av_client if not imported
+            if 'av_client' not in locals():
+                class FallbackAVClient:
+                    def _request(self, *args, **kwargs): return {"error": "AV Client not available (LangGraph mode)"}
+                av_client = FallbackAVClient()
+        except Exception:
+            stock_analysis_agent = None
+            ACTIVE_AGENT = "none"
+            class FallbackAVClient:
+                def _request(self, *args, **kwargs): return {"error": "AV Client not available (No Agent)"}
+            av_client = FallbackAVClient()
+            
+        logger.warning("React Agent initialization failed, fell back to %s", ACTIVE_AGENT, exc_info=e)
+
+# Initialize on startup
+initialize_analysis_agent()
+
+@app.route('/api/analysis/quote/<symbol>', methods=['GET'])
+def get_quote(symbol):
+    """获取股票实时报价"""
+    try:
+        # 复用 analysis_agent 中的工具逻辑，或者直接调用 AV Client
+        # 这里为了保持一致性，直接调用 AV Client
+        params = {"function": "GLOBAL_QUOTE", "symbol": symbol.upper()}
+        data = av_client._request(params)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analysis/history/<symbol>', methods=['GET'])
+def get_history(symbol):
+    """获取股票历史数据"""
+    try:
+        print(f"DEBUG: get_history called for {symbol}")
+        # 默认获取 Daily
+        params = {
+            "function": "TIME_SERIES_DAILY", 
+            "symbol": symbol.upper(),
+            "outputsize": "compact" # "full" for 20 years
+        }
+        data = av_client._request(params)
+        print(f"DEBUG: get_history data keys: {list(data.keys()) if data else 'None'}")
+        if "Time Series (Daily)" in data:
+            print(f"DEBUG: History data found, entries: {len(data['Time Series (Daily)'])}")
+        else:
+            print(f"DEBUG: Time Series (Daily) not found in data: {data}")
+            
+        return jsonify(data)
+    except Exception as e:
+        print(f"DEBUG: get_history error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analysis/indicators/<symbol>', methods=['GET'])
+def get_indicators(symbol):
+    """获取股票指标数据 (SMA, RSI, MACD)"""
+    try:
+        # 并行获取多个指标 (此处简化为串行)
+        results = {}
+        
+        # SMA
+        sma = av_client._request({
+            "function": "SMA", "symbol": symbol.upper(), "interval": "daily", "time_period": 50, "series_type": "close"
+        })
+        results["SMA"] = sma
+        
+        # RSI
+        rsi = av_client._request({
+            "function": "RSI", "symbol": symbol.upper(), "interval": "daily", "time_period": 14, "series_type": "close"
+        })
+        results["RSI"] = rsi
+        
+        # MACD
+        macd = av_client._request({
+            "function": "MACD", "symbol": symbol.upper(), "interval": "daily", "series_type": "close"
+        })
+        results["MACD"] = macd
+        
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analysis/news/<symbol>', methods=['GET'])
+def get_stock_news(symbol):
+    """获取股票新闻"""
+    try:
+        limit = request.args.get('limit', 10)
+        params = {
+            "function": "NEWS_SENTIMENT",
+            "tickers": symbol.upper(),
+            "limit": limit
+        }
+        data = av_client._request(params)
+        
+        # Check for errors
+        if "error" in data: # Check if AV client returned an error dict
+             return jsonify(data), 500
+        if "Error Message" in data:
+             return jsonify({"error": data["Error Message"]}), 500
+
+        feed = data.get("feed", [])
+        return jsonify({"feed": feed, "sentiment_score_definition": data.get("sentiment_score_definition"), "relevance_score_definition": data.get("relevance_score_definition")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analysis/analyze/<symbol>', methods=['POST'])
+def analyze_stock_endpoint(symbol):
+    """AI 股票分析"""
+    try:
+        if stock_analysis_agent is None:
+            return jsonify({"error": "分析服务未就绪，请在设置中配置 API Key"}), 503
+            
+        data = request.get_json() or {}
+        portfolio = data.get('portfolio')
+        
+        # 调用 Async Agent
+        import asyncio
+        result = asyncio.run(stock_analysis_agent.analyze_stock(symbol, portfolio))
+        
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analysis/chat/<symbol>', methods=['POST'])
+def chat_stock_endpoint(symbol):
+    """AI 股票对话"""
+    try:
+        if stock_analysis_agent is None:
+             return jsonify({"error": "分析服务未就绪，请在设置中配置 API Key"}), 503
+             
+        data = request.get_json() or {}
+        question = data.get('message')
+        if not question:
+            return jsonify({"error": "Message required"}), 400
+            
+        # 调用 Async Agent
+        import asyncio
+        result = asyncio.run(stock_analysis_agent.answer_question(symbol, question))
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/settings/keys', methods=['GET'])
+def get_api_keys():
+    """Get API keys (unmasked for local usage)"""
+    try:
+        # Load from .env file directly to get latest values
+        from dotenv import dotenv_values
+        env_config = dotenv_values(os.path.join(platform_dir.parent, ".env"))
+        
+        # Support multiple variants of Alpha Vantage key
+        av_key = (
+            env_config.get("ALPHAVANTAGE_API_KEY") or 
+            env_config.get("ALPHA_VANTAGE_API_KEY") or 
+            env_config.get("ALPHAADVANTAGE_API_KEY") or 
+            ""
+        )
+        
+        keys = {
+            "OPENAI_API_KEY": env_config.get("OPENAI_API_KEY", ""),
+            "ANTHROPIC_API_KEY": env_config.get("ANTHROPIC_API_KEY", ""),
+            "ALPHAVANTAGE_API_KEY": av_key,
+            "FINANCIAL_DATASETS_API_KEY": env_config.get("FINANCIAL_DATASETS_API_KEY", "")
+        }
+        
+        # For local app, we send keys as is so frontend can edit them properly.
+        # Frontend input type="password" handles visual masking.
+        return jsonify({"success": True, "keys": keys, "has_value": {k: bool(v) for k, v in keys.items()}})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/settings/keys', methods=['POST'])
+def save_api_keys():
+    """Save API keys to .env file"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+            
+        # Determine which .env file to use (same logic as startup)
+        env_path = Path(__file__).parent.parent / ".env"
+        if not env_path.exists():
+            # Try root .env
+            root_env = Path(__file__).parent.parent.parent / ".env"
+            if root_env.exists():
+                env_path = root_env
+            else:
+                # Try stock_hackthon .env
+                hackthon_env = Path(__file__).parent.parent.parent / "stock_hackthon" / "backend" / ".env"
+                if hackthon_env.exists():
+                    env_path = hackthon_env
+        
+        # Read existing lines
+        lines = []
+        if env_path.exists():
+            with open(env_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        
+        # Keys to manage
+        keys_map = {
+            "OPENAI_API_KEY": "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
+            "ALPHAVANTAGE_API_KEY": "ALPHAVANTAGE_API_KEY", # We'll save to this one as primary to match frontend
+            "FINANCIAL_DATASETS_API_KEY": "FINANCIAL_DATASETS_API_KEY"
+        }
+        
+        # Also ensure we clean up or sync other variants if needed, 
+        # but for now let's just ensure the requested keys are saved.
+        
+        new_lines = []
+        updated_keys = set()
+        
+        for line in lines:
+            key_match = False
+            for key, env_var in keys_map.items():
+                # Check for exact match or variants for Alpha Vantage
+                is_av = key == "ALPHAVANTAGE_API_KEY"
+                is_target_line = (
+                    line.strip().startswith(f"{env_var}=") or 
+                    (is_av and (
+                        line.strip().startswith("ALPHA_VANTAGE_API_KEY=") or 
+                        line.strip().startswith("ALPHAADVANTAGE_API_KEY=")
+                    ))
+                )
+                
+                if is_target_line:
+                    # If it's the AV key, we want to normalize to ALPHAVANTAGE_API_KEY or keep existing?
+                    # Let's update the specific line found to keep file structure, 
+                    # but use the value from data['ALPHAVANTAGE_API_KEY']
+                    
+                    val_key = key # The key in the 'data' dict
+                    
+                    if val_key in data:
+                        # Extract the actual var name from the line to preserve it
+                        actual_var_name = line.split('=')[0].strip()
+                        if data[val_key]:
+                            new_lines.append(f"{actual_var_name}={data[val_key]}\n")
+                        else:
+                            new_lines.append(f"{actual_var_name}=\n")
+                        updated_keys.add(val_key)
+                    else:
+                        new_lines.append(line)
+                    key_match = True
+                    break
+            
+            if not key_match:
+                new_lines.append(line)
+        
+        # Append new keys that weren't found in file
+        if lines and not lines[-1].endswith('\n'):
+            new_lines.append('\n')
+            
+        for key, env_var in keys_map.items():
+            if key in data and key not in updated_keys:
+                # For AV key, if not found, add standard ALPHAVANTAGE_API_KEY
+                if data[key]:
+                    new_lines.append(f"{env_var}={data[key]}\n")
+                else:
+                    new_lines.append(f"{env_var}=\n")
+        
+        # Write back
+        if not env_path.exists():
+             env_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(env_path, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+            
+        # Update environment variables in current process
+        for key in keys_map.keys():
+            if key in data:
+                # Update the specific env var used by backend
+                os.environ[key] = data[key]
+                # Also update variants for AV
+                if key == "ALPHAVANTAGE_API_KEY":
+                    os.environ["ALPHA_VANTAGE_API_KEY"] = data[key]
+                    os.environ["ALPHAADVANTAGE_API_KEY"] = data[key]
+        
+        # Re-initialize agent with new keys
+        initialize_analysis_agent()
+                
+        return jsonify({"success": True, "message": "API keys saved successfully"})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+
 if __name__ == '__main__':
     port = int(os.getenv('STRATEGY_API_PORT', '8005'))
     print(f"🚀 Starting Strategy Management API on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
-
